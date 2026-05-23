@@ -1,7 +1,6 @@
 import { BRANDING_PROVIDER, ENABLE_BUSINESS_FEATURES } from '@lobechat/business-const';
 import {
   DEFAULT_SEARCH_USER_MEMORY_TOP_K,
-  DEFAULT_USER_MEMORY_EMBEDDING_DIMENSIONS,
   DEFAULT_USER_MEMORY_EMBEDDING_MODEL_ITEM,
   MEMORY_SEARCH_TOP_K_LIMITS,
 } from '@lobechat/const';
@@ -15,8 +14,8 @@ import {
   RemoveIdentityActionSchema,
   UpdateIdentityActionSchema,
 } from '@lobechat/memory-user-memory';
-import { type SearchMemoryResult } from '@lobechat/types';
-import { LayersEnum, RequestTrigger, searchMemorySchema } from '@lobechat/types';
+import type { QueryTaxonomyOptionsResult, SearchMemoryResult } from '@lobechat/types';
+import { LayersEnum, queryTaxonomyOptionsSchema, searchMemorySchema } from '@lobechat/types';
 import { type SQL } from 'drizzle-orm';
 import { and, asc, eq, gte, lte } from 'drizzle-orm';
 import pMap from 'p-map';
@@ -46,12 +45,38 @@ import { authedProcedure, router } from '@/libs/trpc/lambda';
 import { serverDatabase } from '@/libs/trpc/lambda/middleware';
 import { getServerDefaultFilesConfig } from '@/server/globalConfig';
 import { initModelRuntimeFromDB } from '@/server/modules/ModelRuntime';
+import type { UserMemoryEmbeddingRuntime } from '@/server/services/memory/userMemory/embedding';
+import { embedUserMemoryTexts } from '@/server/services/memory/userMemory/embedding';
+import { normalizeSearchMemoryParams } from '@/server/services/memory/userMemory/searchParams';
 
 const EMPTY_SEARCH_RESULT: SearchMemoryResult = {
   activities: [],
   contexts: [],
   experiences: [],
+  identities: [],
+  meta: {
+    appliedFilters: {},
+    appliedQueries: [],
+    layers: {
+      activities: { hasMore: false, returned: 0, total: 0 },
+      contexts: { hasMore: false, returned: 0, total: 0 },
+      experiences: { hasMore: false, returned: 0, total: 0 },
+      identities: { hasMore: false, returned: 0, total: 0 },
+      preferences: { hasMore: false, returned: 0, total: 0 },
+    },
+  },
   preferences: [],
+};
+
+const EMPTY_TAXONOMY_RESULT: QueryTaxonomyOptionsResult = {
+  categories: [],
+  hasMore: {},
+  labels: [],
+  relationships: [],
+  roles: [],
+  statuses: [],
+  tags: [],
+  types: [],
 };
 
 type MemorySearchContext = {
@@ -59,82 +84,6 @@ type MemorySearchContext = {
   memoryEffort: MemoryEffort;
   serverDB: LobeChatDatabase;
   userId: string;
-};
-
-type MemorySearchResult = Awaited<ReturnType<UserMemoryModel['searchWithEmbedding']>>;
-
-const mapMemorySearchResult = (layeredResults: MemorySearchResult): SearchMemoryResult => {
-  return {
-    activities: layeredResults.activities.map((activity) => ({
-      accessedAt: activity.accessedAt,
-      associatedLocations: activity.associatedLocations,
-      associatedObjects: activity.associatedObjects,
-      associatedSubjects: activity.associatedSubjects,
-      capturedAt: activity.capturedAt,
-      createdAt: activity.createdAt,
-      endsAt: activity.endsAt,
-      feedback: activity.feedback,
-      id: activity.id,
-      metadata: activity.metadata,
-      narrative: activity.narrative,
-      notes: activity.notes,
-      startsAt: activity.startsAt,
-      status: activity.status,
-      tags: activity.tags,
-      timezone: activity.timezone,
-      type: activity.type,
-      updatedAt: activity.updatedAt,
-      userMemoryId: activity.userMemoryId,
-    })),
-    contexts: layeredResults.contexts.map((context) => ({
-      accessedAt: context.accessedAt,
-      associatedObjects: context.associatedObjects,
-      associatedSubjects: context.associatedSubjects,
-      createdAt: context.createdAt,
-      currentStatus: context.currentStatus,
-      description: context.description,
-      id: context.id,
-      metadata: context.metadata,
-      scoreImpact: context.scoreImpact,
-      scoreUrgency: context.scoreUrgency,
-      tags: context.tags,
-      title: context.title,
-      type: context.type,
-      updatedAt: context.updatedAt,
-      userMemoryIds: Array.isArray(context.userMemoryIds)
-        ? (context.userMemoryIds as string[])
-        : null,
-    })),
-    experiences: layeredResults.experiences.map((experience) => ({
-      accessedAt: experience.accessedAt,
-      action: experience.action,
-      createdAt: experience.createdAt,
-      id: experience.id,
-      keyLearning: experience.keyLearning,
-      metadata: experience.metadata,
-      possibleOutcome: experience.possibleOutcome,
-      reasoning: experience.reasoning,
-      scoreConfidence: experience.scoreConfidence,
-      situation: experience.situation,
-      tags: experience.tags,
-      type: experience.type,
-      updatedAt: experience.updatedAt,
-      userMemoryId: experience.userMemoryId,
-    })),
-    preferences: layeredResults.preferences.map((preference) => ({
-      accessedAt: preference.accessedAt,
-      conclusionDirectives: preference.conclusionDirectives,
-      createdAt: preference.createdAt,
-      id: preference.id,
-      metadata: preference.metadata,
-      scorePriority: preference.scorePriority,
-      suggestions: preference.suggestions,
-      tags: preference.tags,
-      type: preference.type,
-      updatedAt: preference.updatedAt,
-      userMemoryId: preference.userMemoryId,
-    })),
-  } satisfies SearchMemoryResult;
 };
 
 type MemoryEffort = 'high' | 'low' | 'medium';
@@ -146,14 +95,22 @@ const normalizeMemoryEffort = (value: unknown): MemoryEffort => {
 
 const applySearchLimitsByEffort = (
   effort: MemoryEffort,
-  requested: { activities: number; contexts: number; experiences: number; preferences: number },
+  requested: {
+    activities: number;
+    contexts: number;
+    experiences: number;
+    identities: number;
+    preferences: number;
+  },
 ) => {
   const limit = MEMORY_SEARCH_TOP_K_LIMITS[effort];
+  const identityLimit = effort === 'high' ? 4 : effort === 'low' ? 1 : 2;
 
   return {
     activities: Math.min(requested.activities, limit.activities),
     contexts: Math.min(requested.contexts, limit.contexts),
     experiences: Math.min(requested.experiences, limit.experiences),
+    identities: Math.min(requested.identities, identityLimit),
     preferences: Math.min(requested.preferences, limit.preferences),
   };
 };
@@ -162,38 +119,45 @@ const searchUserMemories = async (
   ctx: MemorySearchContext,
   input: z.infer<typeof searchMemorySchema>,
 ): Promise<SearchMemoryResult> => {
+  const normalizedInput = normalizeSearchMemoryParams(input);
   const { provider, model: embeddingModel } =
     getServerDefaultFilesConfig().embeddingModel || DEFAULT_USER_MEMORY_EMBEDDING_MODEL_ITEM;
-  // Read user's provider config from database
   const modelRuntime = await initModelRuntimeFromDB(ctx.serverDB, ctx.userId, provider);
+  const normalizedQueries = [
+    ...new Set((normalizedInput.queries ?? []).map((query) => query.trim()).filter(Boolean)),
+  ];
 
-  const queryEmbeddings = await modelRuntime.embeddings(
-    {
-      dimensions: DEFAULT_USER_MEMORY_EMBEDDING_DIMENSIONS,
-      input: input.query,
-      model: embeddingModel,
-    },
-    { metadata: { trigger: RequestTrigger.Memory }, user: ctx.userId },
-  );
+  const queryEmbeddings =
+    normalizedQueries.length > 0
+      ? (
+          await embedUserMemoryTexts({
+            input: normalizedQueries,
+            model: embeddingModel,
+            runtime: modelRuntime,
+            source: 'lambda:userMemories.search',
+            userId: ctx.userId,
+          })
+        ).filter((embedding): embedding is number[] => Boolean(embedding))
+      : [];
 
-  const effectiveEffort = normalizeMemoryEffort(input.effort ?? ctx.memoryEffort);
+  const effectiveEffort = normalizeMemoryEffort(normalizedInput.effort ?? ctx.memoryEffort);
   const effortDefaults = MEMORY_SEARCH_TOP_K_LIMITS[effectiveEffort];
 
   const requestedLimits = {
-    activities: input.topK?.activities ?? effortDefaults.activities,
-    contexts: input.topK?.contexts ?? effortDefaults.contexts,
-    experiences: input.topK?.experiences ?? effortDefaults.experiences,
-    preferences: input.topK?.preferences ?? effortDefaults.preferences,
+    activities: normalizedInput.topK?.activities ?? effortDefaults.activities,
+    contexts: normalizedInput.topK?.contexts ?? effortDefaults.contexts,
+    experiences: normalizedInput.topK?.experiences ?? effortDefaults.experiences,
+    identities:
+      normalizedInput.topK?.identities ??
+      (effectiveEffort === 'high' ? 4 : effectiveEffort === 'low' ? 1 : 2),
+    preferences: normalizedInput.topK?.preferences ?? effortDefaults.preferences,
   };
 
   const effortConstrainedLimits = applySearchLimitsByEffort(effectiveEffort, requestedLimits);
-
-  const layeredResults = await ctx.memoryModel.searchWithEmbedding({
-    embedding: queryEmbeddings?.[0],
-    limits: effortConstrainedLimits,
-  });
-
-  return mapMemorySearchResult(layeredResults);
+  return ctx.memoryModel.searchMemory(
+    { ...normalizedInput, queries: normalizedQueries, topK: effortConstrainedLimits },
+    queryEmbeddings,
+  ) as Promise<SearchMemoryResult>;
 };
 
 const getEmbeddingRuntime = async (serverDB: LobeChatDatabase, userId: string) => {
@@ -209,20 +173,23 @@ const getEmbeddingRuntime = async (serverDB: LobeChatDatabase, userId: string) =
   return { agentRuntime, embeddingModel };
 };
 
-const createEmbedder = (agentRuntime: any, embeddingModel: string, userId: string) => {
+const createEmbedder = (
+  agentRuntime: UserMemoryEmbeddingRuntime,
+  embeddingModel: string,
+  userId: string,
+) => {
   return async (value?: string | null): Promise<number[] | undefined> => {
     if (!value || value.trim().length === 0) return undefined;
 
-    const embeddings = await agentRuntime.embeddings(
-      {
-        dimensions: DEFAULT_USER_MEMORY_EMBEDDING_DIMENSIONS,
-        input: value,
-        model: embeddingModel,
-      },
-      { metadata: { trigger: RequestTrigger.Memory }, user: userId },
-    );
+    const [embedding] = await embedUserMemoryTexts({
+      input: [value],
+      model: embeddingModel,
+      runtime: agentRuntime,
+      source: 'lambda:userMemories.tool',
+      userId,
+    });
 
-    return embeddings?.[0];
+    return embedding;
   };
 };
 
@@ -475,6 +442,17 @@ export const userMemoriesRouter = router({
       }
     }),
 
+  queryTaxonomyOptions: memoryProcedure
+    .input(queryTaxonomyOptionsSchema.optional())
+    .query(async ({ ctx, input }) => {
+      try {
+        return await ctx.memoryModel.queryTaxonomyOptions(input ?? {});
+      } catch (error) {
+        console.error('Failed to query memory taxonomy options:', error);
+        return EMPTY_TAXONOMY_RESULT;
+      }
+    }),
+
   reEmbedMemories: memoryProcedure
     .input(reEmbedInputSchema.optional())
     .mutation(async ({ ctx, input }) => {
@@ -491,20 +469,23 @@ export const userMemoriesRouter = router({
         const embedTexts = async (texts: string[]): Promise<number[][]> => {
           if (texts.length === 0) return [];
 
-          const response = await agentRuntime.embeddings(
-            {
-              dimensions: DEFAULT_USER_MEMORY_EMBEDDING_DIMENSIONS,
-              input: texts,
-              model: embeddingModel,
-            },
-            { metadata: { trigger: RequestTrigger.Memory }, user: ctx.userId },
-          );
+          const response = await embedUserMemoryTexts({
+            input: texts,
+            model: embeddingModel,
+            runtime: agentRuntime,
+            source: 'lambda:userMemories.reEmbed',
+            userId: ctx.userId,
+          });
 
-          if (!response || response.length !== texts.length) {
+          if (response.length !== texts.length) {
             throw new Error('Embedding response length mismatch');
           }
 
-          return response;
+          return response.map((embedding) => {
+            if (!embedding) throw new Error('Embedding response length mismatch');
+
+            return embedding;
+          });
         };
 
         const results: Partial<Record<ReEmbedTableKey, ReEmbedStats>> = {};
@@ -942,6 +923,14 @@ export const userMemoriesRouter = router({
   retrieveMemoryForTopic: memoryProcedure
     .input(z.object({ topicId: z.string() }))
     .query(async ({ ctx, input }) => {
+      // Dev-only escape hatch: skip the embedding + memory search triggered by topic
+      // load / switch, so chat debugging logs aren't drowned in `text-embedding-3-small`
+      // router-runtime output. Only honored in non-production builds.
+      if (process.env.NODE_ENV !== 'production' && process.env.DEV_DISABLE_AUTO_MEMORY === '1') {
+        console.info('[dev] skip retrieveMemoryForTopic (DEV_DISABLE_AUTO_MEMORY=1)');
+        return EMPTY_SEARCH_RESULT;
+      }
+
       try {
         // Get concatenated user messages for this topic
         const userMemoryTopicRepo = new UserMemoryTopicRepository(ctx.serverDB, ctx.userId);
@@ -954,7 +943,7 @@ export const userMemoriesRouter = router({
 
         // Search memories using concatenated user messages
         const searchParams = {
-          query,
+          queries: [query],
           topK: DEFAULT_SEARCH_USER_MEMORY_TOP_K,
         };
 

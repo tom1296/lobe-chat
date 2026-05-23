@@ -1,3 +1,4 @@
+import { type OpenAIChatMessage } from '@lobechat/types';
 import { type IEditor, type SlashOptions } from '@lobehub/editor';
 import { type ChatInputProps } from '@lobehub/editor/react';
 import { type MenuProps } from '@lobehub/ui';
@@ -27,10 +28,24 @@ export const initialSendButtonState: SendButtonProps = {
 
 export type SlashPlacement = 'top' | 'bottom';
 
+export interface ContextWindowMessage {
+  content: string;
+}
+
 export interface PublicState {
   agentId?: string;
   allowExpand?: boolean;
+  contextWindowMessages?: ContextWindowMessage[];
+  /**
+   * Disable @ mention trigger (no menu, no agent-assignment hint in placeholder)
+   */
+  disableMention?: boolean;
+  /**
+   * Disable / slash command trigger
+   */
+  disableSlash?: boolean;
   expand?: boolean;
+  getMessages?: () => OpenAIChatMessage[];
   leftActions: ActionKeys[];
   mentionItems?: SlashOptions['items'];
   mobile?: boolean;
@@ -47,6 +62,7 @@ export interface PublicState {
 }
 
 export interface State extends PublicState {
+  _savedEditorState?: Record<string, any>;
   editor?: IEditor;
   isContentEmpty: boolean;
   markdownContent: string;

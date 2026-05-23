@@ -16,12 +16,7 @@ vi.mock('@/services/plugin', () => ({
     createCustomPlugin: vi.fn(),
     uninstallPlugin: vi.fn(),
     updatePluginManifest: vi.fn(),
-  },
-}));
-
-vi.mock('@/services/tool', () => ({
-  toolService: {
-    getToolManifest: vi.fn(),
+    getInstalledPlugins: vi.fn().mockResolvedValue([]),
   },
 }));
 

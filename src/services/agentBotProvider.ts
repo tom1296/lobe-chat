@@ -11,15 +11,22 @@ class AgentBotProviderService {
     return lambdaClient.agentBotProvider.getByAgentId.query({ agentId });
   };
 
-  listRuntimeStatuses = async (agentId: string): Promise<BotRuntimeStatusSnapshot[]> => {
-    return lambdaClient.agentBotProvider.listRuntimeStatuses.query({ agentId });
-  };
-
   getRuntimeStatus = async (params: {
     applicationId: string;
     platform: string;
   }): Promise<BotRuntimeStatusSnapshot> => {
     return lambdaClient.agentBotProvider.getRuntimeStatus.query(params);
+  };
+
+  refreshRuntimeStatus = async (params: {
+    applicationId: string;
+    platform: string;
+  }): Promise<BotRuntimeStatusSnapshot> => {
+    return lambdaClient.agentBotProvider.refreshRuntimeStatus.mutate(params);
+  };
+
+  refreshRuntimeStatusesByAgent = async (agentId: string): Promise<void> => {
+    await lambdaClient.agentBotProvider.refreshRuntimeStatusesByAgent.mutate({ agentId });
   };
 
   create = async (params: {
@@ -59,6 +66,10 @@ class AgentBotProviderService {
 
   testConnection = async (params: { applicationId: string; platform: string }) => {
     return lambdaClient.agentBotProvider.testConnection.mutate(params);
+  };
+
+  lineFetchBotInfo = async (channelAccessToken: string) => {
+    return lambdaClient.agentBotProvider.lineFetchBotInfo.mutate({ channelAccessToken });
   };
 
   wechatGetQrCode = async () => {

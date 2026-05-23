@@ -3,23 +3,29 @@ export const AgentDocumentsIdentifier = 'lobe-agent-documents';
 export const AgentDocumentsApiName = {
   createDocument: 'createDocument',
   copyDocument: 'copyDocument',
-  editDocument: 'editDocument',
+  listDocuments: 'listDocuments',
+  modifyNodes: 'modifyNodes',
   readDocument: 'readDocument',
   removeDocument: 'removeDocument',
   renameDocument: 'renameDocument',
+  replaceDocumentContent: 'replaceDocumentContent',
   updateLoadRule: 'updateLoadRule',
 } as const;
 
 export interface CreateDocumentArgs {
   content: string;
+  hintIsSkill?: boolean;
+  scope?: 'agent' | 'currentTopic';
   title: string;
 }
 
 export interface CreateDocumentState {
+  agentDocumentId?: string;
   documentId?: string;
 }
 
 export interface ReadDocumentArgs {
+  format?: 'xml' | 'markdown' | 'both';
   id: string;
 }
 
@@ -27,16 +33,59 @@ export interface ReadDocumentState {
   content?: string;
   id: string;
   title?: string;
+  xml?: string;
 }
 
-export interface EditDocumentArgs {
+export interface ReplaceDocumentContentArgs {
   content: string;
   id: string;
 }
 
-export interface EditDocumentState {
+export interface ReplaceDocumentContentState {
   id: string;
   updated: boolean;
+}
+
+export type ModifyDocumentInsertOperation =
+  | {
+      action: 'insert';
+      afterId: string;
+      litexml: string;
+    }
+  | {
+      action: 'insert';
+      beforeId: string;
+      litexml: string;
+    };
+
+export interface ModifyDocumentUpdateOperation {
+  action: 'modify';
+  litexml: string | string[];
+}
+
+export interface ModifyDocumentRemoveOperation {
+  action: 'remove';
+  id: string;
+}
+
+export type ModifyDocumentOperation =
+  | ModifyDocumentInsertOperation
+  | ModifyDocumentRemoveOperation
+  | ModifyDocumentUpdateOperation;
+
+export interface ModifyDocumentNodesArgs {
+  id: string;
+  operations: ModifyDocumentOperation[];
+}
+
+export interface ModifyDocumentNodesState {
+  id: string;
+  results: Array<{
+    action: 'insert' | 'remove' | 'modify';
+    success: boolean;
+  }>;
+  successCount: number;
+  totalCount: number;
 }
 
 export interface RemoveDocumentArgs {
@@ -102,4 +151,13 @@ export interface LoadRuleScope {
 export interface AgentDocumentReference {
   id: string;
   title?: string;
+}
+
+export interface ListDocumentsArgs {
+  scope?: 'agent' | 'currentTopic';
+  sourceType?: 'all' | 'file' | 'web';
+}
+
+export interface ListDocumentsState {
+  documents: { documentId?: string; filename: string; id: string; title?: string }[];
 }

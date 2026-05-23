@@ -36,7 +36,7 @@ export function defineConfig(config: CustomNextConfig) {
         ...(buildWithDocker
           ? [
               // Exclude SPA/desktop/mobile build artifacts from serverless functions
-              'public/spa/**',
+              'public/_spa/**',
               'dist/desktop/**',
               'dist/mobile/**',
 
@@ -355,6 +355,7 @@ export function defineConfig(config: CustomNextConfig) {
     serverExternalPackages: config.serverExternalPackages ?? [
       'pdfkit',
       '@napi-rs/canvas',
+      '@lobehub/editor',
       'discord.js',
       'ffmpeg-static',
       'pdfjs-dist',

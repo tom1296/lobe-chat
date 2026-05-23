@@ -8,7 +8,7 @@ import type {
 } from '@lobechat/types';
 import { isEmpty } from 'es-toolkit/compat';
 import type { AIChatModelCard, AiProviderModelListItem, EnabledAiModel } from 'model-bank';
-import { AiModelSourceEnum } from 'model-bank';
+import { AiModelSourceEnum, isAiModelVisible } from 'model-bank';
 import * as modelBank from 'model-bank';
 import { DEFAULT_MODEL_PROVIDER_LIST } from 'model-bank/modelProviders';
 import pMap from 'p-map';
@@ -207,11 +207,11 @@ export class AiInfraRepos {
 
             // User hasn't modified local model
             if (!user)
-              return {
+              return injectSearchSettings(provider.id, {
                 ...item,
                 abilities: item.abilities || {},
                 providerId: provider.id,
-              };
+              });
 
             const mergedModel = {
               ...item,
@@ -408,11 +408,23 @@ export class AiInfraRepos {
     // Not modifying search settings here doesn't affect usage, but done for data consistency on get
     let mergedModel = mergeArrayById(defaultModels, aiModels) as AiProviderModelListItem[];
 
+    // Model type (chat/video/image/embedding/tts/stt) should always come from builtin config,
+    // because remote-fetched models from provider API (e.g. OpenAI /v1/models) don't return
+    // a type field, causing them to fallback to 'chat' and get saved to DB with wrong type.
+    // e.g. sora-2 is a video model but gets stored as 'chat' after "Fetch models".
+    const builtinTypeMap = new Map(defaultModels.map((m) => [m.id, m.type]));
+    for (const m of mergedModel) {
+      const builtinType = builtinTypeMap.get(m.id);
+      if (builtinType) m.type = builtinType;
+    }
+
     // Filter out DB residual models that are no longer in the builtin list for branding provider
     if (providerId === BRANDING_PROVIDER) {
       const builtinIds = new Set(defaultModels.map((m) => m.id));
       mergedModel = mergedModel.filter((m) => builtinIds.has(m.id));
     }
+
+    mergedModel = mergedModel.filter(isAiModelVisible);
 
     let list = mergedModel.map((m) =>
       injectSearchSettings(providerId, m),

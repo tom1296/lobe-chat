@@ -35,6 +35,21 @@ export class BuiltinAgentSliceActionImpl {
     this.#get = get;
   }
 
+  refreshBuiltinAgent = async (slug: string): Promise<void> => {
+    const data = await agentService.getBuiltinAgent(slug);
+    if (data?.id) {
+      this.#get().internal_dispatchAgentMap(data.id, data as PartialDeep<LobeAgentConfig>);
+      // Mirror useInitBuiltinAgent's onSuccess: keep builtinAgentIdMap in sync
+      // so callers can rely on this as a real "ensure" path instead of just a
+      // post-init refresh.
+      this.#set(
+        { builtinAgentIdMap: { ...this.#get().builtinAgentIdMap, [slug]: data.id } },
+        false,
+        `refreshBuiltinAgent/${slug}`,
+      );
+    }
+  };
+
   useInitBuiltinAgent = (
     slug: string,
     context?: UseInitBuiltinAgentContext,

@@ -32,6 +32,21 @@ export const getLLMConfig = () => {
       ENABLED_MOONSHOT: z.boolean(),
       MOONSHOT_API_KEY: z.string().optional(),
 
+      ENABLED_KIMICODINGPLAN: z.boolean(),
+      KIMICODINGPLAN_API_KEY: z.string().optional(),
+
+      ENABLED_BAILIANCODINGPLAN: z.boolean(),
+      BAILIANCODINGPLAN_API_KEY: z.string().optional(),
+
+      ENABLED_GLMCODINGPLAN: z.boolean(),
+      GLMCODINGPLAN_API_KEY: z.string().optional(),
+
+      ENABLED_MINIMAXCODINGPLAN: z.boolean(),
+      MINIMAXCODINGPLAN_API_KEY: z.string().optional(),
+
+      ENABLED_VOLCENGINECODINGPLAN: z.boolean(),
+      VOLCENGINECODINGPLAN_API_KEY: z.string().optional(),
+
       ENABLED_PERPLEXITY: z.boolean(),
       PERPLEXITY_API_KEY: z.string().optional(),
 
@@ -80,6 +95,9 @@ export const getLLMConfig = () => {
 
       ENABLED_XINFERENCE: z.boolean(),
       XINFERENCE_API_KEY: z.string().optional(),
+
+      ENABLED_LMSTUDIO: z.boolean(),
+      LMSTUDIO_API_KEY: z.string().optional(),
 
       ENABLED_QINIU: z.boolean(),
       QINIU_API_KEY: z.string().optional(),
@@ -219,11 +237,20 @@ export const getLLMConfig = () => {
 
       ENABLED_LOBEHUB: z.boolean(),
 
+      ENABLED_OPENCODEZEN: z.boolean(),
+      OPENCODEZEN_API_KEY: z.string().optional(),
+
+      ENABLED_OPENCODECODINGPLAN: z.boolean(),
+      OPENCODECODINGPLAN_API_KEY: z.string().optional(),
+
       ENABLED_XIAOMIMIMO: z.boolean(),
       XIAOMIMIMO_API_KEY: z.string().optional(),
 
       ENABLED_LONGCAT: z.boolean(),
       LONGCAT_API_KEY: z.string().optional(),
+
+      ENABLED_STREAMLAKE: z.boolean(),
+      STREAMLAKE_API_KEY: z.string().optional(),
     },
     runtimeEnv: {
       API_KEY_SELECT_MODE: process.env.API_KEY_SELECT_MODE,
@@ -278,6 +305,21 @@ export const getLLMConfig = () => {
       ENABLED_MOONSHOT: !!process.env.MOONSHOT_API_KEY,
       MOONSHOT_API_KEY: process.env.MOONSHOT_API_KEY,
 
+      ENABLED_KIMICODINGPLAN: !!process.env.KIMICODINGPLAN_API_KEY,
+      KIMICODINGPLAN_API_KEY: process.env.KIMICODINGPLAN_API_KEY,
+
+      ENABLED_BAILIANCODINGPLAN: !!process.env.BAILIANCODINGPLAN_API_KEY,
+      BAILIANCODINGPLAN_API_KEY: process.env.BAILIANCODINGPLAN_API_KEY,
+
+      ENABLED_GLMCODINGPLAN: !!process.env.GLMCODINGPLAN_API_KEY,
+      GLMCODINGPLAN_API_KEY: process.env.GLMCODINGPLAN_API_KEY,
+
+      ENABLED_MINIMAXCODINGPLAN: !!process.env.MINIMAXCODINGPLAN_API_KEY,
+      MINIMAXCODINGPLAN_API_KEY: process.env.MINIMAXCODINGPLAN_API_KEY,
+
+      ENABLED_VOLCENGINECODINGPLAN: !!process.env.VOLCENGINECODINGPLAN_API_KEY,
+      VOLCENGINECODINGPLAN_API_KEY: process.env.VOLCENGINECODINGPLAN_API_KEY,
+
       ENABLED_GROQ: !!process.env.GROQ_API_KEY,
       GROQ_API_KEY: process.env.GROQ_API_KEY,
 
@@ -305,6 +347,9 @@ export const getLLMConfig = () => {
 
       ENABLED_XINFERENCE: !!process.env.XINFERENCE_API_KEY,
       XINFERENCE_API_KEY: process.env.XINFERENCE_API_KEY,
+
+      ENABLED_LMSTUDIO: !!process.env.LMSTUDIO_API_KEY,
+      LMSTUDIO_API_KEY: process.env.LMSTUDIO_API_KEY,
 
       ENABLED_QINIU: !!process.env.QINIU_API_KEY,
       QINIU_API_KEY: process.env.QINIU_API_KEY,
@@ -442,11 +487,20 @@ export const getLLMConfig = () => {
 
       ENABLED_LOBEHUB: !!process.env.ENABLED_LOBEHUB,
 
+      ENABLED_OPENCODEZEN: !!process.env.OPENCODEZEN_API_KEY,
+      OPENCODEZEN_API_KEY: process.env.OPENCODEZEN_API_KEY,
+
+      ENABLED_OPENCODECODINGPLAN: !!process.env.OPENCODECODINGPLAN_API_KEY,
+      OPENCODECODINGPLAN_API_KEY: process.env.OPENCODECODINGPLAN_API_KEY,
+
       ENABLED_XIAOMIMIMO: !!process.env.XIAOMIMIMO_API_KEY,
       XIAOMIMIMO_API_KEY: process.env.XIAOMIMIMO_API_KEY,
 
       ENABLED_LONGCAT: !!process.env.LONGCAT_API_KEY,
       LONGCAT_API_KEY: process.env.LONGCAT_API_KEY,
+
+      ENABLED_STREAMLAKE: !!process.env.STREAMLAKE_API_KEY,
+      STREAMLAKE_API_KEY: process.env.STREAMLAKE_API_KEY,
     },
   });
 };

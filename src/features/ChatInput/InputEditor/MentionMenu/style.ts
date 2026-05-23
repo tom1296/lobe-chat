@@ -1,6 +1,6 @@
-import { createStyles } from 'antd-style';
+import { createStaticStyles } from 'antd-style';
 
-export const useStyles = createStyles(({ css, token, isDarkMode }) => ({
+export const styles = createStaticStyles(({ css, cssVar }) => ({
   backHeader: css`
     cursor: pointer;
 
@@ -13,20 +13,25 @@ export const useStyles = createStyles(({ css, token, isDarkMode }) => ({
 
     font-size: 13px;
     font-weight: 500;
-    color: ${token.colorTextSecondary};
+    color: ${cssVar.colorTextSecondary};
 
     &:hover {
-      color: ${token.colorText};
+      color: ${cssVar.colorText};
     }
   `,
   categoryExtra: css`
+    overflow: hidden;
     display: flex;
     flex-shrink: 0;
     gap: 2px;
     align-items: center;
 
+    max-width: 180px;
+
     font-size: 12px;
-    color: ${token.colorTextQuaternary};
+    color: ${cssVar.colorTextQuaternary};
+    text-overflow: ellipsis;
+    white-space: nowrap;
   `,
   container: css`
     position: fixed;
@@ -39,24 +44,24 @@ export const useStyles = createStyles(({ css, token, isDarkMode }) => ({
     max-width: 360px;
     max-height: 360px;
     padding: 4px;
-    border: 1px solid ${token.colorBorderSecondary};
+    border: 1px solid ${cssVar.colorBorderSecondary};
     border-radius: 10px;
 
-    background: ${isDarkMode ? token.colorBgElevated : token.colorBgContainer};
-    box-shadow: ${token.boxShadowSecondary};
+    background: ${cssVar.colorBgElevated};
+    box-shadow: ${cssVar.boxShadowSecondary};
   `,
   divider: css`
     height: 1px;
     margin-block: 4px;
     margin-inline: 8px;
-    background: ${token.colorBorder};
+    background: ${cssVar.colorBorder};
   `,
   empty: css`
     padding-block: 16px;
     padding-inline: 12px;
 
     font-size: 13px;
-    color: ${token.colorTextQuaternary};
+    color: ${cssVar.colorTextQuaternary};
     text-align: center;
   `,
   item: css`
@@ -75,13 +80,17 @@ export const useStyles = createStyles(({ css, token, isDarkMode }) => ({
     transition: background 0.1s;
 
     &:hover {
-      background: ${token.colorFillTertiary};
+      background: ${cssVar.colorFillTertiary};
     }
   `,
+  itemWithCategoryExtra: css`
+    padding-inline-end: 6px;
+  `,
   itemActive: css`
-    background: ${token.colorFillSecondary};
+    background: ${cssVar.colorFillSecondary};
   `,
   itemIcon: css`
+    overflow: hidden;
     display: flex;
     flex-shrink: 0;
     align-items: center;
@@ -89,15 +98,45 @@ export const useStyles = createStyles(({ css, token, isDarkMode }) => ({
 
     width: 24px;
     height: 24px;
+    border-radius: 6px;
   `,
   itemLabel: css`
     overflow: hidden;
     flex: 1;
+
+    min-width: 0;
+
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  `,
+  localFileName: css`
+    overflow: hidden;
+    flex: 1;
+
+    min-width: 88px;
+
+    font-size: 13px;
+    color: ${cssVar.colorText};
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  `,
+  localFilePath: css`
+    overflow: hidden;
+    flex: 0 1 auto;
+
+    max-width: 190px;
+
+    font-family: ${cssVar.fontFamilyCode};
+    font-size: 12px;
+    color: ${cssVar.colorTextQuaternary};
+    text-align: end;
     text-overflow: ellipsis;
     white-space: nowrap;
   `,
   scrollArea: css`
     overflow-y: auto;
     flex: 1;
+    margin: -4px;
+    padding: 4px;
   `,
 }));

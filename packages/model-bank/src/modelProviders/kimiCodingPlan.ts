@@ -14,13 +14,13 @@ const KimiCodingPlan: ModelProviderCard = {
   settings: {
     disableBrowserRequest: true,
     proxyUrl: {
-      placeholder: 'https://api.kimi.com/coding/v1',
+      placeholder: 'https://api.kimi.com/coding',
     },
     responseAnimation: {
       speed: 2,
       text: 'smooth',
     },
-    sdkType: 'openai',
+    sdkType: 'anthropic',
     showDeployName: true,
     showModelFetcher: false,
   },

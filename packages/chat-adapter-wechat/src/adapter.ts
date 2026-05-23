@@ -14,6 +14,7 @@ import type {
   WebhookOptions,
 } from 'chat';
 import { Message, parseMarkdown } from 'chat';
+import mime from 'mime';
 
 import { WechatApiClient } from './api';
 import { WechatFormatConverter } from './format-converter';
@@ -32,11 +33,12 @@ function extractText(msg: WechatRawMessage): string {
         break;
       }
       case MessageItemType.IMAGE: {
-        parts.push('[image]');
+        // Image content is conveyed via attachments, no text placeholder needed
         break;
       }
       case MessageItemType.VOICE: {
-        parts.push(item.voice_item?.text || '[voice]');
+        // Only include transcription text, skip placeholder
+        if (item.voice_item?.text) parts.push(item.voice_item.text);
         break;
       }
       case MessageItemType.FILE: {
@@ -44,7 +46,7 @@ function extractText(msg: WechatRawMessage): string {
         break;
       }
       case MessageItemType.VIDEO: {
-        parts.push('[video]');
+        // Video content is conveyed via attachments, no text placeholder needed
         break;
       }
     }
@@ -81,6 +83,227 @@ function hasCdnMedia(item: WechatRawMessage['item_list'][number]): boolean {
       return false;
     }
   }
+}
+
+/**
+ * Walk a raw WeChat message and produce metadata-only attachments — no
+ * downloads, no decryption. Used by `WechatAdapter.parseRawEvent` so the
+ * inbound parse path stays cheap: media bytes are downloaded later, on
+ * demand, by the server-side `WechatGatewayClient.extractFiles`.
+ *
+ * Why metadata-only at parse time:
+ *   1. The chat-sdk's `Message.toJSON` strips `buffer` from attachments
+ *      whenever the message is enqueued (debounce always; queue when busy),
+ *      so any eager-downloaded buffer is wasted on the serialization round-trip.
+ *   2. Most inbound messages in group chats are not addressed to the bot —
+ *      pre-downloading them is pure CPU/bandwidth waste for the 99% case.
+ *   3. Concentrating the download path in one place (the server-side
+ *      `extractFiles`) makes the data flow easier to reason about.
+ *
+ * The fields populated here all survive `Message.toJSON` (type/mimeType/
+ * name/size are in its allowlist), so downstream consumers still get a
+ * count + descriptive metadata for each attachment.
+ */
+export function extractMediaMetadata(msg: WechatRawMessage): Attachment[] {
+  const attachments: Attachment[] = [];
+
+  for (const item of msg.item_list) {
+    switch (item.type) {
+      case MessageItemType.IMAGE: {
+        if (!item.image_item) break;
+        attachments.push({
+          mimeType: 'image/jpeg',
+          name: 'image.jpg',
+          type: 'image',
+          url: '',
+        } as Attachment);
+        break;
+      }
+      case MessageItemType.VOICE: {
+        if (!item.voice_item) break;
+        attachments.push({
+          mimeType: 'audio/silk',
+          type: 'audio',
+          url: '',
+        } as Attachment);
+        break;
+      }
+      case MessageItemType.FILE: {
+        if (!item.file_item) break;
+        const fileName = item.file_item.file_name;
+        const fileMimeType = (fileName && mime.getType(fileName)) || 'application/octet-stream';
+        attachments.push({
+          mimeType: fileMimeType,
+          name: fileName,
+          size: parseOptionalNumber(item.file_item.len),
+          type: 'file',
+          url: '',
+        } as Attachment);
+        break;
+      }
+      case MessageItemType.VIDEO: {
+        if (!item.video_item) break;
+        attachments.push({
+          mimeType: 'video/mp4',
+          size: parseOptionalNumber(item.video_item.video_size),
+          type: 'video',
+          url: '',
+        } as Attachment);
+        break;
+      }
+    }
+  }
+
+  return attachments;
+}
+
+/**
+ * Standalone helper that downloads + decrypts media for a raw WeChat
+ * message, returning attachments with `buffer` populated. This is the
+ * primary download path used by the server-side `WechatGatewayClient.extractFiles`
+ * to materialize media on demand after a chat-sdk Redis round-trip has
+ * stripped any in-memory buffers.
+ *
+ * Pure function — owns no state, takes the api client + raw message + an
+ * optional logger. Includes the cascading image fallback (CDN main → thumb
+ * → direct URL).
+ */
+type WarnFn = (message: string, ...args: unknown[]) => void;
+
+export async function downloadMediaFromRawMessage(
+  api: WechatApiClient,
+  msg: WechatRawMessage,
+  logger?: Pick<Logger, 'warn'>,
+): Promise<Attachment[]> {
+  const warn: WarnFn = logger?.warn?.bind(logger) ?? (() => {});
+  const attachments: Attachment[] = [];
+
+  for (const item of msg.item_list) {
+    try {
+      switch (item.type) {
+        case MessageItemType.IMAGE: {
+          const attachment = await downloadImageItemFromRaw(api, item, warn);
+          if (attachment) attachments.push(attachment);
+          break;
+        }
+        case MessageItemType.VOICE: {
+          if (!hasCdnMedia(item) || !item.voice_item?.media) break;
+          const voiceBuf = await api.downloadCdnMedia(item.voice_item.media);
+          attachments.push({
+            buffer: voiceBuf,
+            mimeType: 'audio/silk',
+            type: 'audio',
+            url: '',
+          } as Attachment);
+          break;
+        }
+        case MessageItemType.FILE: {
+          if (!hasCdnMedia(item) || !item.file_item?.media) break;
+          const fileBuf = await api.downloadCdnMedia(item.file_item.media);
+          const fileName = item.file_item?.file_name;
+          const fileMimeType = (fileName && mime.getType(fileName)) || 'application/octet-stream';
+          attachments.push({
+            buffer: fileBuf,
+            mimeType: fileMimeType,
+            name: fileName,
+            size: parseOptionalNumber(item.file_item?.len),
+            type: 'file',
+            url: '',
+          } as Attachment);
+          break;
+        }
+        case MessageItemType.VIDEO: {
+          if (!hasCdnMedia(item) || !item.video_item?.media) break;
+          const videoBuf = await api.downloadCdnMedia(item.video_item.media);
+          attachments.push({
+            buffer: videoBuf,
+            mimeType: 'video/mp4',
+            size: parseOptionalNumber(item.video_item?.video_size),
+            type: 'video',
+            url: '',
+          } as Attachment);
+          break;
+        }
+      }
+    } catch (error) {
+      warn('Failed to download %s media from CDN: %s', MessageItemType[item.type], error);
+    }
+  }
+
+  return attachments;
+}
+
+/**
+ * Image-specific helper used by {@link downloadMediaFromRawMessage}. Cascades:
+ *   1. CDN main media (image_item.media)
+ *   2. CDN thumbnail (image_item.thumb_media)
+ *   3. Direct URL (image_item.url)
+ */
+async function downloadImageItemFromRaw(
+  api: WechatApiClient,
+  item: WechatRawMessage['item_list'][number],
+  warn: WarnFn,
+): Promise<Attachment | undefined> {
+  const imageItem = item.image_item;
+  if (!imageItem) return undefined;
+
+  // 1. Try CDN download from main media
+  if (imageItem.media?.encrypt_query_param) {
+    try {
+      const buf = await api.downloadCdnMedia(imageItem.media, imageItem.aeskey);
+      return {
+        buffer: buf,
+        mimeType: 'image/jpeg',
+        name: 'image.jpg',
+        type: 'image',
+        url: '',
+      } as Attachment;
+    } catch (error) {
+      warn('CDN image download failed: %s', error);
+    }
+  }
+
+  // 2. Try CDN thumbnail as fallback
+  if (imageItem.thumb_media?.encrypt_query_param) {
+    try {
+      const buf = await api.downloadCdnMedia(imageItem.thumb_media, imageItem.aeskey);
+      return {
+        buffer: buf,
+        mimeType: 'image/jpeg',
+        name: 'image.jpg',
+        type: 'image',
+        url: '',
+      } as Attachment;
+    } catch (error) {
+      warn('CDN thumbnail download failed: %s', error);
+    }
+  }
+
+  // 3. Fall back to direct url field
+  if (imageItem.url) {
+    try {
+      const response = await fetch(imageItem.url, {
+        signal: AbortSignal.timeout(15_000),
+      });
+      if (response.ok) {
+        const buf = Buffer.from(await response.arrayBuffer());
+        const contentType = response.headers.get('content-type') || 'image/jpeg';
+        return {
+          buffer: buf,
+          mimeType: contentType,
+          name: 'image.jpg',
+          type: 'image',
+          url: '',
+        } as Attachment;
+      }
+      warn('Image url fallback failed: HTTP %d', response.status);
+    } catch (error) {
+      warn('Image url fallback failed: %s', error);
+    }
+  }
+
+  warn('No image source available (no CDN media, no thumb, no url)');
+  return undefined;
 }
 
 /**
@@ -150,7 +373,14 @@ export class WechatAdapter implements Adapter<WechatThreadId, WechatRawMessage> 
     }
 
     const text = extractText(msg);
-    if (!text.trim()) {
+    const hasMedia = msg.item_list.some(
+      (item) =>
+        item.type === MessageItemType.IMAGE ||
+        item.type === MessageItemType.VIDEO ||
+        item.type === MessageItemType.VOICE ||
+        item.type === MessageItemType.FILE,
+    );
+    if (!text.trim() && !hasMedia) {
       return Response.json({ ok: true });
     }
 
@@ -158,7 +388,7 @@ export class WechatAdapter implements Adapter<WechatThreadId, WechatRawMessage> 
     const threadId = this.encodeThreadId({ id: msg.from_user_id, type: 'single' });
     this.contextTokens.set(threadId, msg.context_token);
 
-    const messageFactory = () => this.parseRawEvent(msg, threadId, text);
+    const messageFactory = async () => this.parseRawEvent(msg, threadId, text);
     this.chat.processMessage(this, threadId, messageFactory, options);
 
     return Response.json({ ok: true });
@@ -234,7 +464,9 @@ export class WechatAdapter implements Adapter<WechatThreadId, WechatRawMessage> 
     const formatted = parseMarkdown(text);
     const threadId = this.encodeThreadId({ id: raw.from_user_id, type: 'single' });
 
-    // parseMessage is synchronous — CDN download happens in parseRawEvent instead.
+    // No attachments here — neither this nor `parseRawEvent` downloads media
+    // anymore. Server-side `WechatGatewayClient.extractFiles` is the sole
+    // download path; it walks `message.raw.item_list` on demand.
     return new Message({
       attachments: [],
       author: {
@@ -256,15 +488,17 @@ export class WechatAdapter implements Adapter<WechatThreadId, WechatRawMessage> 
     });
   }
 
-  private async parseRawEvent(
+  private parseRawEvent(
     msg: WechatRawMessage,
     threadId: string,
     text: string,
-  ): Promise<Message<WechatRawMessage>> {
+  ): Message<WechatRawMessage> {
     const formatted = parseMarkdown(text);
 
-    // Download and decrypt media from WeChat CDN (protocol-spec §8.3).
-    const attachments = await this.downloadMediaAttachments(msg);
+    // Metadata-only attachments — actual binary download happens later, on
+    // demand, in the server-side `WechatGatewayClient.extractFiles`. See
+    // `extractMediaMetadata` for why we don't pre-download here.
+    const attachments = extractMediaMetadata(msg);
 
     const author: Author = {
       fullName: msg.from_user_id,
@@ -287,75 +521,6 @@ export class WechatAdapter implements Adapter<WechatThreadId, WechatRawMessage> 
       text,
       threadId,
     });
-  }
-
-  /**
-   * Download CDN media items and return attachments with data URLs.
-   * Per protocol-spec §8.3: GET CDN /download → AES-128-ECB decrypt.
-   */
-  private async downloadMediaAttachments(msg: WechatRawMessage): Promise<Attachment[]> {
-    const attachments: Attachment[] = [];
-
-    for (const item of msg.item_list) {
-      if (!hasCdnMedia(item)) continue;
-
-      try {
-        switch (item.type) {
-          case MessageItemType.IMAGE: {
-            const media = item.image_item!.media;
-            const buffer = await this.api.downloadCdnMedia(media, item.image_item!.aeskey);
-            attachments.push({
-              mimeType: 'image/jpeg',
-              name: 'image.jpg',
-              type: 'image',
-              url: `data:image/jpeg;base64,${buffer.toString('base64')}`,
-            });
-            break;
-          }
-          case MessageItemType.VOICE: {
-            const media = item.voice_item!.media;
-            const buffer = await this.api.downloadCdnMedia(media);
-            attachments.push({
-              mimeType: 'audio/silk',
-              type: 'audio',
-              url: `data:audio/silk;base64,${buffer.toString('base64')}`,
-            });
-            break;
-          }
-          case MessageItemType.FILE: {
-            const media = item.file_item!.media;
-            const buffer = await this.api.downloadCdnMedia(media);
-            attachments.push({
-              mimeType: 'application/octet-stream',
-              name: item.file_item?.file_name,
-              size: parseOptionalNumber(item.file_item?.len),
-              type: 'file',
-              url: `data:application/octet-stream;base64,${buffer.toString('base64')}`,
-            });
-            break;
-          }
-          case MessageItemType.VIDEO: {
-            const media = item.video_item!.media;
-            const buffer = await this.api.downloadCdnMedia(media);
-            attachments.push({
-              mimeType: 'video/mp4',
-              size: parseOptionalNumber(item.video_item?.video_size),
-              type: 'video',
-              url: `data:video/mp4;base64,${buffer.toString('base64')}`,
-            });
-            break;
-          }
-        }
-      } catch (error) {
-        this.logger.warn(
-          'Failed to download %s media from CDN: %s',
-          MessageItemType[item.type],
-          error,
-        );
-      }
-    }
-
-    return attachments;
   }
 
   // ------------------------------------------------------------------

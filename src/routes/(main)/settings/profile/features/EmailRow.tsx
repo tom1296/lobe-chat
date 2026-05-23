@@ -1,7 +1,7 @@
 'use client';
 
 import { Button, Flexbox, Input, Text } from '@lobehub/ui';
-import { AnimatePresence, m as motion } from 'motion/react';
+import { AnimatePresence, m } from 'motion/react';
 import { useCallback, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 
@@ -10,15 +10,11 @@ import { changeEmail } from '@/libs/better-auth/auth-client';
 import { useUserStore } from '@/store/user';
 import { userProfileSelectors } from '@/store/user/selectors';
 
-import { labelStyle, rowStyle } from './ProfileRow';
+import ProfileRow from './ProfileRow';
 
 const EMAIL_REGEX = /^[^\s@]+@[^\s@.]+(?:\.[^\s@.]+)+$/;
 
-interface EmailRowProps {
-  mobile?: boolean;
-}
-
-const EmailRow = ({ mobile }: EmailRowProps) => {
+const EmailRow = () => {
   const { t } = useTranslation('auth');
   const email = useUserStore(userProfileSelectors.email);
   const [isEditing, setIsEditing] = useState(false);
@@ -66,7 +62,7 @@ const EmailRow = ({ mobile }: EmailRowProps) => {
   }, [editValue, t]);
 
   const editingContent = (
-    <motion.div
+    <m.div
       animate={{ opacity: 1, y: 0 }}
       exit={{ opacity: 0, y: -10 }}
       initial={{ opacity: 0, y: -10 }}
@@ -74,7 +70,6 @@ const EmailRow = ({ mobile }: EmailRowProps) => {
       transition={{ duration: 0.2 }}
     >
       <Flexbox gap={12}>
-        {!mobile && <Text strong>{t('profile.emailInputHint')}</Text>}
         <Input
           autoFocus
           placeholder={t('profile.emailPlaceholder')}
@@ -100,53 +95,34 @@ const EmailRow = ({ mobile }: EmailRowProps) => {
           </Button>
         </Flexbox>
       </Flexbox>
-    </motion.div>
+    </m.div>
   );
 
   const displayContent = (
-    <motion.div
+    <m.div
       animate={{ opacity: 1 }}
       exit={{ opacity: 0 }}
       initial={{ opacity: 0 }}
       key="display"
       transition={{ duration: 0.2 }}
     >
-      {mobile ? (
-        <Text>{email || '--'}</Text>
-      ) : (
-        <Flexbox horizontal align="center" justify="space-between">
-          <Text>{email || '--'}</Text>
+      <Text>{email || '--'}</Text>
+    </m.div>
+  );
+
+  return (
+    <ProfileRow
+      label={t('profile.email')}
+      action={
+        !isEditing && (
           <Text style={{ cursor: 'pointer', fontSize: 13 }} onClick={handleStartEdit}>
             {t('profile.updateEmail')}
           </Text>
-        </Flexbox>
-      )}
-    </motion.div>
-  );
-
-  if (mobile) {
-    return (
-      <Flexbox gap={12} style={rowStyle}>
-        <Flexbox horizontal align="center" justify="space-between">
-          <Text strong>{t('profile.email')}</Text>
-          {!isEditing && (
-            <Text style={{ cursor: 'pointer', fontSize: 13 }} onClick={handleStartEdit}>
-              {t('profile.updateEmail')}
-            </Text>
-          )}
-        </Flexbox>
-        <AnimatePresence mode="wait">{isEditing ? editingContent : displayContent}</AnimatePresence>
-      </Flexbox>
-    );
-  }
-
-  return (
-    <Flexbox horizontal gap={24} style={rowStyle}>
-      <Text style={labelStyle}>{t('profile.email')}</Text>
-      <Flexbox style={{ flex: 1 }}>
-        <AnimatePresence mode="wait">{isEditing ? editingContent : displayContent}</AnimatePresence>
-      </Flexbox>
-    </Flexbox>
+        )
+      }
+    >
+      <AnimatePresence mode="wait">{isEditing ? editingContent : displayContent}</AnimatePresence>
+    </ProfileRow>
   );
 };
 

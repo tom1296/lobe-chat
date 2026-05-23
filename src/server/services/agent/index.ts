@@ -12,6 +12,7 @@ import { SessionModel } from '@/database/models/session';
 import { UserModel } from '@/database/models/user';
 import { getRedisConfig } from '@/envs/redis';
 import {
+  getJSONFromRedis,
   initializeRedisWithPrefix,
   isRedisEnabled,
   RedisKeyNamespace,
@@ -81,9 +82,9 @@ export class AgentService {
     const mergedConfig = this.mergeDefaultConfig(agent, defaultAgentConfig);
     if (!mergedConfig) return null;
 
-    // Merge avatar from builtin-agents package definition
+    // Use builtin avatar as fallback only when DB has no custom avatar
     const builtinAgent = BUILTIN_AGENTS[slug as BuiltinAgentSlug];
-    if (builtinAgent?.avatar) {
+    if (builtinAgent?.avatar && !mergedConfig.avatar) {
       return { ...mergedConfig, avatar: builtinAgent.avatar };
     }
 
@@ -151,13 +152,10 @@ export class AgentService {
       if (!isRedisEnabled(redisConfig)) return null;
 
       const redis = await initializeRedisWithPrefix(redisConfig, RedisKeyNamespace.AI_GENERATION);
-      if (!redis) return null;
-
-      const key = RedisKeys.aiGeneration.agentWelcome(agentId);
-      const value = await redis.get(key);
-      if (!value) return null;
-
-      return JSON.parse(value) as AgentWelcomeData;
+      return getJSONFromRedis<AgentWelcomeData>(
+        redis,
+        RedisKeys.aiGeneration.agentWelcome(agentId),
+      );
     } catch (error) {
       // Log error for observability but don't break agent retrieval
       log('Failed to get agent welcome from Redis for agent %s: %O', agentId, error);

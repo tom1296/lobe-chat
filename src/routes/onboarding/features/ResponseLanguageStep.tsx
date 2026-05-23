@@ -7,7 +7,7 @@ import { Undo2Icon } from 'lucide-react';
 import { memo, useCallback, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 
-import { type Locales } from '@/locales/resources';
+import type { Locales } from '@/locales/resources';
 import { localeOptions, normalizeLocale } from '@/locales/resources';
 import { useGlobalStore } from '@/store/global';
 import { useUserStore } from '@/store/user';
@@ -16,24 +16,30 @@ import LobeMessage from '../components/LobeMessage';
 
 interface ResponseLanguageStepProps {
   onBack: () => void;
-  onNext: () => void;
+  onNext: () => Promise<void> | void;
 }
 
 const ResponseLanguageStep = memo<ResponseLanguageStepProps>(({ onBack, onNext }) => {
-  const { t } = useTranslation(['onboarding', 'common']);
+  const { i18n, t } = useTranslation(['onboarding', 'common']);
   const switchLocale = useGlobalStore((s) => s.switchLocale);
   const setSettings = useUserStore((s) => s.setSettings);
 
-  const [value, setValue] = useState<Locales | ''>(normalizeLocale(navigator.language));
+  // Mirror i18n's current locale rather than navigator.language. The user may
+  // have already switched language in the previous step (TelemetryStep), so
+  // navigator.language can disagree with what is being rendered. Deriving
+  // straight from i18n keeps the Select in lock-step with the visible UI.
+  const value: Locales = normalizeLocale(
+    i18n.resolvedLanguage || i18n.language || navigator.language,
+  );
   const [isNavigating, setIsNavigating] = useState(false);
   const isNavigatingRef = useRef(false);
 
-  const handleNext = useCallback(() => {
+  const handleNext = useCallback(async () => {
     if (isNavigatingRef.current) return;
     isNavigatingRef.current = true;
     setIsNavigating(true);
-    setSettings({ general: { responseLanguage: value || '' } });
-    onNext();
+    await setSettings({ general: { responseLanguage: value } });
+    await onNext();
   }, [value, setSettings, onNext]);
 
   const handleBack = useCallback(() => {
@@ -54,7 +60,7 @@ const ResponseLanguageStep = memo<ResponseLanguageStepProps>(({ onBack, onNext }
         ]}
       />
     ),
-    [t, value],
+    [t],
   );
 
   return (
@@ -80,10 +86,7 @@ const ResponseLanguageStep = memo<ResponseLanguageStepProps>(({ onBack, onNext }
             width: '100%',
           }}
           onChange={(v) => {
-            if (v) {
-              switchLocale(v);
-              setValue(v);
-            }
+            if (v) switchLocale(v);
           }}
         />
         <SendButton

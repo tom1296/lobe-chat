@@ -27,6 +27,10 @@ export default {
   'billing.subscriptionId': 'Subscription ID',
   'billing.unpaid': 'Unpaid',
   'billing.view': 'View',
+  'crossPlatform.desc':
+    'This subscription was purchased through the mobile app and cannot be modified here. Please manage your subscription on your mobile device.',
+  'crossPlatform.manageOnMobile': 'Manage on mobile device',
+  'crossPlatform.title': 'Cross-Platform Subscription',
   'cancelPlan.alert':
     'You will still enjoy the benefits until the current plan expires ({{date}}). You can resubscribe at any time before expiration.',
   'cancelPlan.desc':
@@ -60,8 +64,11 @@ export default {
   'downgradePlans.title': 'Switch to {{plan}}',
   'credits.autoTopUp.currentBalance': 'Current Balance',
   'credits.autoTopUp.desc': 'Ensure your credits never run out',
+  'credits.autoTopUp.noCustomerHint':
+    'Purchase credits once to save a payment method before enabling auto top-up.',
   'credits.autoTopUp.noPaymentMethodHint':
     'No payment method on file. Auto top-up needs a saved card to charge automatically.',
+  'credits.autoTopUp.purchaseCredits': 'Purchase Credits',
   'credits.autoTopUp.setupPaymentMethod': 'Add Payment Method',
   'credits.autoTopUp.monthlyLimit': 'Monthly Limit',
   'credits.autoTopUp.monthlyLimitDesc':
@@ -92,6 +99,7 @@ export default {
   'credits.packages.filter.gift': 'Gift',
   'credits.packages.filter.manual': 'Manual',
   'credits.packages.noPackages': 'No credit packages',
+  'credits.packages.charged': 'Charged ${{amount}}',
   'credits.packages.purchaseFirst': 'Purchase your first credit package',
   'credits.packages.purchasedOn': 'Purchased on {{date}}',
   'credits.packages.sort.amountAsc': 'Amount: Low to High',
@@ -109,6 +117,7 @@ export default {
   'credits.packages.title': 'My Credit Packages',
   'credits.topUp.cancel': 'Cancel',
   'credits.topUp.custom': 'Custom',
+  'credits.topUp.freeFeeHint': 'Free plan top-ups include a {{fee}} service fee per 1M credits.',
   'credits.topUp.maxAmountError': 'Single purchase amount cannot exceed ${{max}}',
   'credits.topUp.purchaseError': 'Purchase failed, please try again later',
   'credits.topUp.purchaseNow': 'Purchase Now',
@@ -417,7 +426,6 @@ export default {
   'referral.table.columns.inviterRewardAmount': 'My Reward',
   'referral.table.columns.rewardedAt': 'Reward Time',
   'referral.table.columns.status': 'Status',
-  'referral.table.columns.suspectedReason': 'Anomaly Reason',
   'referral.table.status.pending_reward': 'Under Review',
   'referral.table.status.registered': 'Registered',
   'referral.table.status.revoked': 'Revoked',

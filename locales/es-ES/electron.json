@@ -1,4 +1,13 @@
 {
+  "gateway.description": "Descripción",
+  "gateway.descriptionPlaceholder": "Opcional",
+  "gateway.deviceName": "Nombre del Dispositivo",
+  "gateway.deviceNamePlaceholder": "Ingrese el nombre del dispositivo",
+  "gateway.enableConnection": "Conectar al Gateway",
+  "gateway.statusConnected": "Conectado al Gateway",
+  "gateway.statusConnecting": "Conectando al Gateway...",
+  "gateway.statusDisconnected": "No conectado al Gateway",
+  "gateway.title": "Gateway de Dispositivo",
   "navigation.chat": "Chat",
   "navigation.discover": "Descubrir",
   "navigation.discoverAssistants": "Descubrir Asistentes",
@@ -26,6 +35,7 @@
   "navigation.recentView": "Vistas recientes",
   "navigation.resources": "Recursos",
   "navigation.settings": "Configuración",
+  "navigation.tasks": "Tareas",
   "navigation.unpin": "Desfijar",
   "notification.finishChatGeneration": "Generación de mensaje por IA completada",
   "proxy.auth": "Autenticación requerida",
@@ -97,6 +107,9 @@
   "tab.closeLeftTabs": "Cerrar pestañas a la izquierda",
   "tab.closeOtherTabs": "Cerrar otras pestañas",
   "tab.closeRightTabs": "Cerrar pestañas a la derecha",
+  "tab.newTab": "Nueva pestaña",
+  "tab.running": "El agente se está ejecutando",
+  "tab.unread": "Nuevo mensaje",
   "updater.checkingUpdate": "Buscando actualizaciones",
   "updater.checkingUpdateDesc": "Obteniendo información de la versión...",
   "updater.downloadNewVersion": "Descargar nueva versión",
@@ -124,5 +137,7 @@
   "window.close": "Cerrar ventana",
   "window.maximize": "Maximizar ventana",
   "window.minimize": "Minimizar ventana",
-  "window.restore": "Restaurar ventana"
+  "window.pinToTop": "Fijar arriba",
+  "window.restore": "Restaurar ventana",
+  "window.unpinFromTop": "Quitar de arriba"
 }

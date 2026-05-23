@@ -6,12 +6,10 @@ const nvidiaChatModels: AIChatModelCard[] = [
       functionCall: true,
       reasoning: true,
     },
-    contextWindowTokens: 128_000,
-    description:
-      'MiniMax-M2 is a compact, fast, cost-effective MoE model (230B total, 10B active) built for top-tier coding and agent performance while retaining strong general intelligence. It excels at multi-file edits, code-run-fix loops, test validation, and complex toolchains.',
-    displayName: 'MiniMax-M2',
-    id: 'minimaxai/minimax-m2',
-    maxOutput: 16_384,
+    contextWindowTokens: 204_800,
+    displayName: 'MiniMax-M2.7',
+    id: 'minimaxai/minimax-m2.7',
+    maxOutput: 131_072,
     type: 'chat',
   },
   {
@@ -20,11 +18,8 @@ const nvidiaChatModels: AIChatModelCard[] = [
       reasoning: true,
     },
     contextWindowTokens: 204_800,
-    description:
-      'MiniMax-M2.1 is a compact, fast, cost-effective MoE model built for top-tier coding and agent performance.',
-    displayName: 'MiniMax-M2.1',
-    enabled: true,
-    id: 'minimaxai/minimax-m2.1',
+    displayName: 'MiniMax-M2.5',
+    id: 'minimaxai/minimax-m2.5',
     maxOutput: 131_072,
     type: 'chat',
   },
@@ -54,7 +49,6 @@ const nvidiaChatModels: AIChatModelCard[] = [
     description:
       'GLM-4.7 is Zhipu latest flagship model, enhanced for Agentic Coding scenarios with improved coding capabilities.',
     displayName: 'GLM-4.7',
-    enabled: true,
     id: 'z-ai/glm4.7',
     maxOutput: 131_072,
     settings: {
@@ -71,89 +65,6 @@ const nvidiaChatModels: AIChatModelCard[] = [
     description:
       "GLM-5 is Zhipu AI's new flagship foundation model for agent engineering, achieving open-source SOTA performance in coding and agent capabilities. It matches Claude Opus 4.5 in performance.",
     displayName: 'GLM-5',
-    enabled: true,
-    id: 'z-ai/glm5',
-    maxOutput: 131_072,
-    settings: {
-      extendParams: ['enableReasoning'],
-    },
-    type: 'chat',
-  },
-  {
-    abilities: {
-      functionCall: true,
-      reasoning: true,
-    },
-    contextWindowTokens: 262_144,
-    description:
-      'Kimi K2.5 is the most intelligent Kimi model to date, featuring native multimodal architecture.',
-    displayName: 'Kimi K2.5',
-    enabled: true,
-    id: 'moonshotai/kimi-k2.5',
-    maxOutput: 65_536,
-    settings: {
-      extendParams: ['enableReasoning'],
-    },
-    type: 'chat',
-  },
-  {
-    abilities: {
-      functionCall: true,
-      reasoning: true,
-    },
-    contextWindowTokens: 204_800,
-    description:
-      'MiniMax-M2.1 is a compact, fast, cost-effective MoE model built for top-tier coding and agent performance.',
-    displayName: 'MiniMax-M2.1',
-    enabled: true,
-    id: 'minimaxai/minimax-m2.1',
-    maxOutput: 131_072,
-    type: 'chat',
-  },
-  {
-    abilities: {
-      functionCall: true,
-      reasoning: true,
-    },
-    contextWindowTokens: 131_072,
-    description:
-      'DeepSeek V3.2 is a next-gen reasoning model with stronger complex reasoning and chain-of-thought capabilities.',
-    displayName: 'DeepSeek V3.2',
-    enabled: true,
-    id: 'deepseek-ai/deepseek-v3.2',
-    maxOutput: 65_536,
-    settings: {
-      extendParams: ['enableReasoning'],
-    },
-    type: 'chat',
-  },
-  {
-    abilities: {
-      functionCall: true,
-      reasoning: true,
-    },
-    contextWindowTokens: 200_000,
-    description:
-      'GLM-4.7 is Zhipu latest flagship model, enhanced for Agentic Coding scenarios with improved coding capabilities.',
-    displayName: 'GLM-4.7',
-    enabled: true,
-    id: 'z-ai/glm4.7',
-    maxOutput: 131_072,
-    settings: {
-      extendParams: ['enableReasoning'],
-    },
-    type: 'chat',
-  },
-  {
-    abilities: {
-      functionCall: true,
-      reasoning: true,
-    },
-    contextWindowTokens: 200_000,
-    description:
-      "GLM-5 is Zhipu AI's new flagship foundation model for agent engineering, achieving open-source SOTA performance in coding and agent capabilities. It matches Claude Opus 4.5 in performance.",
-    displayName: 'GLM-5',
-    enabled: true,
     id: 'z-ai/glm5',
     maxOutput: 131_072,
     settings: {
@@ -188,22 +99,6 @@ const nvidiaChatModels: AIChatModelCard[] = [
       'DeepSeek V3.1 is a next-gen reasoning model with stronger complex reasoning and chain-of-thought for deep analysis tasks.',
     displayName: 'DeepSeek V3.1 Terminus',
     id: 'deepseek-ai/deepseek-v3.1-terminus',
-    maxOutput: 16_384,
-    settings: {
-      extendParams: ['enableReasoning'],
-    },
-    type: 'chat',
-  },
-  {
-    abilities: {
-      functionCall: true,
-      reasoning: true,
-    },
-    contextWindowTokens: 131_072,
-    description:
-      'DeepSeek V3.1 is a next-gen reasoning model with stronger complex reasoning and chain-of-thought for deep analysis tasks.',
-    displayName: 'DeepSeek V3.1',
-    id: 'deepseek-ai/deepseek-v3.1',
     maxOutput: 16_384,
     settings: {
       extendParams: ['enableReasoning'],
@@ -281,17 +176,6 @@ const nvidiaChatModels: AIChatModelCard[] = [
     type: 'chat',
   },
   {
-    abilities: {
-      functionCall: true,
-    },
-    contextWindowTokens: 128_000,
-    description:
-      'An advanced LLM supporting synthetic data generation, knowledge distillation, and reasoning for chatbots, coding, and domain tasks.',
-    displayName: 'Llama 3.1 405B Instruct',
-    id: 'meta/llama-3.1-405b-instruct',
-    type: 'chat',
-  },
-  {
     contextWindowTokens: 32_768,
     description: 'A distinctive language model delivering exceptional accuracy and efficiency.',
     displayName: 'Llama 3.1 Nemotron 51B Instruct',
@@ -311,22 +195,6 @@ const nvidiaChatModels: AIChatModelCard[] = [
     description: 'An advanced small language model designed for edge applications.',
     displayName: 'Gemma 2 2B Instruct',
     id: 'google/gemma-2-2b-it',
-    type: 'chat',
-  },
-  {
-    contextWindowTokens: 8192,
-    description:
-      'A frontier text generation model strong in understanding, transformation, and code generation.',
-    displayName: 'Gemma 2 9B Instruct',
-    id: 'google/gemma-2-9b-it',
-    type: 'chat',
-  },
-  {
-    contextWindowTokens: 8192,
-    description:
-      'A frontier text generation model strong in understanding, transformation, and code generation.',
-    displayName: 'Gemma 2 27B Instruct',
-    id: 'google/gemma-2-27b-it',
     type: 'chat',
   },
   {
@@ -354,39 +222,6 @@ const nvidiaChatModels: AIChatModelCard[] = [
       'An advanced LLM for code generation, reasoning, and repair across mainstream programming languages.',
     displayName: 'Qwen2.5 Coder 32B Instruct',
     id: 'qwen/qwen2.5-coder-32b-instruct',
-    type: 'chat',
-  },
-  {
-    abilities: {
-      functionCall: true,
-      reasoning: true,
-    },
-    contextWindowTokens: 204_800,
-    description:
-      'MiniMax-M2.5 is the latest large language model from MiniMax, featuring a Mixture-of-Experts (MoE) architecture with 229 billion total parameters. It achieves industry-leading performance in programming, agent tool calling, search tasks, and office scenarios.',
-    displayName: 'MiniMax-M2.5',
-    enabled: true,
-    id: 'minimaxai/minimax-m2.5',
-    maxOutput: 131_072,
-    type: 'chat',
-  },
-  {
-    abilities: {
-      functionCall: true,
-      reasoning: true,
-      vision: true,
-      video: true,
-    },
-    contextWindowTokens: 1_010_000,
-    description:
-      'Supports text, image, and video inputs. For text-only tasks, its performance is comparable to Qwen3 Max, offering higher efficiency and lower cost. In multimodal capabilities, it delivers significant improvements over the Qwen3 VL series.',
-    displayName: 'Qwen3.5-397B-A17B',
-    enabled: true,
-    id: 'qwen/qwen3.5-397b-a17b',
-    maxOutput: 65_536,
-    settings: {
-      extendParams: ['enableReasoning'],
-    },
     type: 'chat',
   },
 ];

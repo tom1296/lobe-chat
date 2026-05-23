@@ -1,10 +1,18 @@
 import { LobeActivatorIdentifier } from '@lobechat/builtin-tool-activator';
 import { AgentBuilderIdentifier } from '@lobechat/builtin-tool-agent-builder';
 import { AgentManagementIdentifier } from '@lobechat/builtin-tool-agent-management';
-import { CredsIdentifier, type CredSummary, generateCredsList } from '@lobechat/builtin-tool-creds';
+import {
+  CredsIdentifier,
+  type CredSummary,
+  generateCredsList,
+  generateKlavisServicesList,
+  type KlavisServiceSummary,
+} from '@lobechat/builtin-tool-creds';
 import { GroupAgentBuilderIdentifier } from '@lobechat/builtin-tool-group-agent-builder';
-import { GTDIdentifier } from '@lobechat/builtin-tool-gtd';
-import { isDesktop, KLAVIS_SERVER_TYPES, LOBEHUB_SKILL_PROVIDERS } from '@lobechat/const';
+import { LobeAgentIdentifier } from '@lobechat/builtin-tool-lobe-agent';
+import { PageAgentIdentifier } from '@lobechat/builtin-tool-page-agent';
+import { WebOnboardingIdentifier } from '@lobechat/builtin-tool-web-onboarding';
+import { KLAVIS_SERVER_TYPES, LOBEHUB_SKILL_PROVIDERS } from '@lobechat/const';
 import type {
   AgentBuilderContext,
   AgentContextDocument,
@@ -12,17 +20,14 @@ import type {
   AgentManagementContext,
   GroupAgentBuilderContext,
   GroupOfficialToolItem,
-  GTDConfig,
   LobeToolManifest,
   MemoryContext,
+  OnboardingContext,
+  PlanTodoConfig,
   ToolDiscoveryConfig,
   UserMemoryData,
 } from '@lobechat/context-engine';
-import {
-  AGENT_DOCUMENT_INJECTION_POSITIONS,
-  MessagesEngine,
-  resolveTopicReferences,
-} from '@lobechat/context-engine';
+import { MessagesEngine, resolveTopicReferences } from '@lobechat/context-engine';
 import { historySummaryPrompt } from '@lobechat/prompts';
 import type {
   OpenAIChatMessage,
@@ -35,10 +40,9 @@ import debug from 'debug';
 import { isCanUseFC } from '@/helpers/isCanUseFC';
 import { VARIABLE_GENERATORS } from '@/helpers/parserPlaceholder';
 import { lambdaClient } from '@/libs/trpc/client';
-import { agentDocumentService } from '@/services/agentDocument';
 import { notebookService } from '@/services/notebook';
 import { getAgentStoreState } from '@/store/agent';
-import { agentSelectors } from '@/store/agent/selectors';
+import { agentChatConfigSelectors, agentSelectors } from '@/store/agent/selectors';
 import { getChatGroupStoreState } from '@/store/agentGroup';
 import { agentGroupSelectors } from '@/store/agentGroup/selectors';
 import { getAiInfraStoreState } from '@/store/aiInfra';
@@ -51,30 +55,18 @@ import {
   lobehubSkillStoreSelectors,
   toolSelectors,
 } from '@/store/tool/selectors';
+import { KlavisServerStatus } from '@/store/tool/slices/klavisStore';
 
 import { isCanUseVideo, isCanUseVision } from '../helper';
 import { combineUserMemoryData, resolveTopicMemories, resolveUserPersona } from './memoryManager';
 import { resolveClientSkills } from './skillEngineering';
-import { stripActionTagsFromText } from './skillPreload';
 
 const log = debug('context-engine:contextEngineering');
-
-const VALID_DOCUMENT_POSITIONS = new Set<AgentContextDocument['loadPosition']>(
-  AGENT_DOCUMENT_INJECTION_POSITIONS,
-);
-
-const normalizeDocumentPosition = (
-  position: string | null | undefined,
-): AgentContextDocument['loadPosition'] | undefined => {
-  if (!position) return undefined;
-  return VALID_DOCUMENT_POSITIONS.has(position as AgentContextDocument['loadPosition'])
-    ? (position as AgentContextDocument['loadPosition'])
-    : undefined;
-};
 
 interface ContextEngineeringContext {
   /** Agent Builder context for injecting current agent info */
   agentBuilderContext?: AgentBuilderContext;
+  agentDocuments?: AgentContextDocument[];
   /** The agent ID that will respond (for group context injection) */
   agentId?: string;
   enableHistoryCount?: boolean;
@@ -106,42 +98,9 @@ interface ContextEngineeringContext {
   stepContext?: RuntimeStepContext;
   systemRole?: string;
   tools?: string[];
-  /** Topic ID for GTD context injection */
+  /** Topic ID for plan/todo context injection */
   topicId?: string;
 }
-
-type TextContentPart = {
-  text?: string;
-  type?: string;
-  [key: string]: unknown;
-};
-
-const preprocessActionTags = (messages: UIChatMessage[]): UIChatMessage[] =>
-  messages.map((message) => {
-    if (message.role !== 'user') return message;
-
-    if (typeof message.content === 'string') {
-      return {
-        ...message,
-        content: stripActionTagsFromText(message.content),
-      };
-    }
-
-    if (Array.isArray(message.content)) {
-      const contentParts = message.content as TextContentPart[];
-
-      return {
-        ...message,
-        content: contentParts.map((part) =>
-          part?.type === 'text' && typeof part.text === 'string'
-            ? { ...part, text: stripActionTagsFromText(part.text) }
-            : part,
-        ),
-      } as unknown as UIChatMessage;
-    }
-
-    return message;
-  });
 
 // REVIEW: Maybe we can constrain identity, preference, exp to reorder or trim the context instead of passing everything in
 export const contextEngineering = async ({
@@ -157,6 +116,7 @@ export const contextEngineering = async ({
   historyCount,
   historySummary,
   agentBuilderContext,
+  agentDocuments,
   agentId,
   groupId,
   initialContext,
@@ -165,8 +125,6 @@ export const contextEngineering = async ({
   topicId,
   memoryContext,
 }: ContextEngineeringContext): Promise<OpenAIChatMessage[]> => {
-  messages = preprocessActionTags(messages);
-
   log('tools: %o', tools);
 
   // Check if Agent Builder tool is enabled
@@ -224,7 +182,6 @@ export const contextEngineering = async ({
 
   // Get agent store state (used for both group agent builder context and file/knowledge base)
   const agentStoreState = getAgentStoreState();
-  const resolvedAgentId = agentId || agentStoreState.activeAgentId;
 
   // Build group agent builder context if Group Agent Builder is enabled
   // Note: Uses activeGroupId from chatStore to get the group being edited
@@ -351,31 +308,6 @@ export const contextEngineering = async ({
     .filter((kb) => kb.enabled)
     .map((kb) => ({ description: kb.description, id: kb.id, name: kb.name }));
 
-  let agentDocuments: AgentContextDocument[] | undefined;
-
-  if (resolvedAgentId) {
-    try {
-      const documents = await agentDocumentService.getDocuments({ agentId: resolvedAgentId });
-      agentDocuments = documents.map((doc) => ({
-        content: doc.content,
-        filename: doc.filename,
-        id: doc.id,
-        loadRules: doc.loadRules,
-        policyLoadFormat: doc.policy?.context?.policyLoadFormat || doc.policyLoadFormat,
-        loadPosition: normalizeDocumentPosition(
-          doc.policy?.context?.position || doc.policyLoadPosition,
-        ),
-        policyId: doc.templateId,
-        title: doc.title,
-      }));
-
-      log('agentDocuments resolved: %d', agentDocuments.length);
-    } catch (error) {
-      // Agent documents are optional context; failure should not block message processing.
-      log('Failed to resolve agent documents for agent %s: %O', resolvedAgentId, error);
-    }
-  }
-
   // Resolve user memories: topic memories and user persona are independent layers
   // Both functions now read from cache only (no network requests) to avoid blocking sendMessage
   let userMemoryData: UserMemoryData | undefined;
@@ -385,12 +317,12 @@ export const contextEngineering = async ({
     userMemoryData = combineUserMemoryData(topicMemories, persona);
   }
 
-  // Resolve GTD context: plan and todos
-  // GTD tool must be enabled and topicId must be provided
-  const isGTDEnabled = tools?.includes(GTDIdentifier) ?? false;
-  let gtdConfig: GTDConfig | undefined;
+  // Resolve plan + todos context (now part of the lobe-agent tool).
+  // Lobe-agent must be enabled and topicId must be provided.
+  const isPlanTodoEnabled = tools?.includes(LobeAgentIdentifier) ?? false;
+  let planTodoConfig: PlanTodoConfig | undefined;
 
-  if (isGTDEnabled && topicId) {
+  if (isPlanTodoEnabled && topicId) {
     try {
       // Fetch plan document for the current topic
       const planResult = await notebookService.listDocuments({
@@ -415,17 +347,17 @@ export const contextEngineering = async ({
         // Get todos from plan's metadata
         const todos = planDoc.metadata?.todos;
 
-        gtdConfig = {
+        planTodoConfig = {
           enabled: true,
           plan,
           todos,
         };
 
-        log('GTD context resolved: plan=%s, todos=%o', plan.goal, todos?.items?.length ?? 0);
+        log('Plan/Todo context resolved: plan=%s, todos=%o', plan.goal, todos?.items?.length ?? 0);
       }
     } catch (error) {
-      // Silently fail - GTD context is optional
-      log('Failed to resolve GTD context:', error);
+      // Silently fail - plan/todo context is optional
+      log('Failed to resolve plan/todo context:', error);
     }
   }
 
@@ -450,6 +382,39 @@ export const contextEngineering = async ({
     } catch (error) {
       // Silently fail - creds context is optional
       log('Failed to resolve creds context:', error);
+    }
+  }
+
+  // Build Klavis services list for creds context
+  // Shows which Klavis services are connected (authorized) and which are available to connect
+  let klavisServicesList = '';
+
+  const isKlavisEnabled =
+    typeof window !== 'undefined' &&
+    window.global_serverConfigStore?.getState()?.serverConfig?.enableKlavis;
+
+  if (isCredsEnabled && isKlavisEnabled) {
+    try {
+      const toolState = getToolStoreState();
+      const allKlavisServers = klavisStoreSelectors.getServers(toolState);
+
+      const connected: KlavisServiceSummary[] = allKlavisServers
+        .filter((s) => s.status === KlavisServerStatus.CONNECTED)
+        .map((s) => ({ identifier: s.identifier, name: s.serverName }));
+
+      const connectedIds = new Set(connected.map((s) => s.identifier));
+      const available: KlavisServiceSummary[] = KLAVIS_SERVER_TYPES.filter(
+        (t) => !connectedIds.has(t.identifier),
+      ).map((t) => ({ identifier: t.identifier, name: t.label }));
+
+      klavisServicesList = generateKlavisServicesList(connected, available);
+      log(
+        'Klavis services context resolved: connected=%d, available=%d',
+        connected.length,
+        available.length,
+      );
+    } catch (error) {
+      log('Failed to resolve Klavis services context:', error);
     }
   }
 
@@ -478,8 +443,58 @@ export const contextEngineering = async ({
     }
   }
 
-  // Build Agent Management context if Agent Management tool is enabled
+  // Build Agent Management context.
+  // - availableAgents is injected whenever the user is in auto skill mode (so the
+  //   supervisor can decide to activate agent-management on its own) OR when the tool
+  //   is explicitly enabled.
+  // - availableProviders / availablePlugins are only built when the tool is explicitly
+  //   enabled, since they're solely needed for createAgent / updateAgent.
   let agentManagementContext: AgentManagementContext | undefined;
+
+  const isInAutoSkillMode =
+    agentChatConfigSelectors.skillActivateMode(agentStoreState) !== 'manual';
+  const shouldInjectAvailableAgents = isInAutoSkillMode || isAgentManagementEnabled;
+
+  if (shouldInjectAvailableAgents) {
+    try {
+      // Over-fetch by 2: +1 reserved for the current agent (filtered out below
+      // so the model has no exposure to its own id and cannot self-delegate)
+      // and +1 to detect overflow for the `hasMore` flag.
+      const AVAILABLE_AGENTS_LIMIT = 10;
+      const recentAgents = await lambdaClient.agent.queryAgents.query({
+        limit: AVAILABLE_AGENTS_LIMIT + 2,
+      });
+
+      // Exclude current agent from `availableAgents`. The model is the current
+      // agent — its identity/persona is already established by `systemRole`, so
+      // we don't re-inject it here, and removing self from the list ensures the
+      // model never sees its own id in the agent-management context (so it
+      // cannot accidentally call itself via `callAgent`).
+      const otherAgents = agentId ? recentAgents.filter((a) => a.id !== agentId) : recentAgents;
+      const hasMoreAgents = otherAgents.length > AVAILABLE_AGENTS_LIMIT;
+      const availableAgents = otherAgents.slice(0, AVAILABLE_AGENTS_LIMIT).map((a) => ({
+        description: a.description ?? undefined,
+        id: a.id,
+        title: a.title ?? 'Untitled',
+      }));
+
+      agentManagementContext = {
+        availableAgents,
+        availableAgentsHasMore: hasMoreAgents,
+        ...(agentId && {
+          currentAgent: {
+            id: agentId,
+            title: agentSelectors.getAgentMetaById(agentId)(agentStoreState)?.title ?? undefined,
+          },
+        }),
+      };
+      log('availableAgents fetched: %d agents (hasMore=%s)', availableAgents.length, hasMoreAgents);
+    } catch (error) {
+      // Silently fail - availableAgents context is optional
+      log('Failed to fetch availableAgents: %O', error);
+    }
+  }
+
   if (isAgentManagementEnabled) {
     // Get enabled providers and models from aiInfra store
     const aiProviderState = getAiInfraStoreState();
@@ -562,14 +577,16 @@ export const contextEngineering = async ({
     }
 
     agentManagementContext = {
+      ...agentManagementContext,
       availablePlugins,
       availableProviders,
     };
 
     log(
-      'agentManagementContext built: %d providers, %d plugins',
+      'agentManagementContext built: %d providers, %d plugins, %d agents',
       agentManagementContext.availableProviders?.length ?? 0,
       agentManagementContext.availablePlugins?.length ?? 0,
+      agentManagementContext.availableAgents?.length ?? 0,
     );
   }
 
@@ -604,6 +621,20 @@ export const contextEngineering = async ({
     },
   );
 
+  // Build onboarding context if this is the web-onboarding agent.
+  // Single combined trpc call — server runs state/soul/persona DB queries in parallel.
+  let onboardingContext: OnboardingContext | undefined;
+  const isOnboardingAgent = tools?.includes(WebOnboardingIdentifier);
+  if (isOnboardingAgent) {
+    try {
+      const { userService } = await import('@/services/user');
+      onboardingContext = await userService.getOnboardingAgentContext();
+      log('Built onboarding context');
+    } catch (error) {
+      log('Failed to build onboarding context: %O', error);
+    }
+  }
+
   // Create MessagesEngine with injected dependencies
   const engine = new MessagesEngine({
     // Agent configuration
@@ -622,7 +653,7 @@ export const contextEngineering = async ({
     },
 
     // File context configuration
-    fileContext: { enabled: true, includeFileUrl: !isDesktop },
+    fileContext: { enabled: true, includeFileUrl: false },
 
     // Knowledge injection
     knowledge: {
@@ -642,9 +673,28 @@ export const contextEngineering = async ({
     initialContext,
     stepContext,
 
-    // Skills configuration — expose all installed skills so the AI can discover and activate them
+    // Selected skills/tools from user for this request
+    selectedSkills: initialContext?.selectedSkills,
+    selectedTools: initialContext?.selectedTools,
+
+    // Pass enableAgentMode through; MessagesEngine force-disables skills /
+    // agent-document injectors when this is `false` (chat mode).
+    enableAgentMode: agentChatConfigSelectors.currentChatConfig(agentStoreState).enableAgentMode,
+
+    // Skills configuration
+    // In auto mode: expose all installed skills so the AI can discover and activate them
+    // In manual mode: only expose user-selected skills (filtered by pluginIds)
     skillsConfig: {
-      enabledSkills: plugins ? resolveClientSkills(plugins).skills : undefined,
+      enabledSkills: plugins
+        ? (() => {
+            const skillSet = resolveClientSkills(plugins);
+            if (!isInAutoSkillMode) {
+              const selectedIds = new Set(plugins);
+              return skillSet.skills.filter((s) => selectedIds.has(s.identifier));
+            }
+            return skillSet.skills;
+          })()
+        : undefined,
     },
 
     // Tool Discovery configuration
@@ -652,6 +702,9 @@ export const contextEngineering = async ({
 
     // Tools configuration
     toolsConfig: {
+      disabledToolIdentifiers: tools?.includes(PageAgentIdentifier)
+        ? undefined
+        : [PageAgentIdentifier],
       manifests,
       tools,
     },
@@ -664,17 +717,38 @@ export const contextEngineering = async ({
       ...VARIABLE_GENERATORS,
       // NOTICE: required by builtin-tool-creds/src/systemRole.ts
       CREDS_LIST: () => (credsList ? generateCredsList(credsList) : ''),
+      // NOTICE: required by builtin-tool-creds/src/systemRole.ts (Klavis integrations)
+      KLAVIS_SERVICES_LIST: () => klavisServicesList,
       // NOTICE(@nekomeowww): required by builtin-tool-memory/src/systemRole.ts
       memory_effort: () => (userMemoryConfig ? (memoryContext?.effort ?? '') : ''),
+      // Current agent + topic identity — referenced by the LobeHub builtin
+      // skill (packages/builtin-skills/src/lobehub/content.ts) so the model
+      // can run `lh agent run -a {{agent_id}}` etc without first having to
+      // search for itself. Read lazily from stores so we only pay the cost
+      // when the placeholder actually appears in a rendered message.
+      agent_id: () => agentId ?? '',
+      agent_title: () =>
+        agentId ? (agentSelectors.getAgentMetaById(agentId)(agentStoreState)?.title ?? '') : '',
+      agent_description: () =>
+        agentId
+          ? (agentSelectors.getAgentMetaById(agentId)(agentStoreState)?.description ?? '')
+          : '',
+      topic_id: () => topicId ?? '',
+      topic_title: () => {
+        if (!topicId) return '';
+        const topic = topicSelectors.getTopicById(topicId)(getChatStoreState());
+        return topic?.title ?? '';
+      },
     },
 
     // Extended contexts - only pass when enabled
     ...(isAgentBuilderEnabled && { agentBuilderContext }),
     ...(isGroupAgentBuilderEnabled && { groupAgentBuilderContext }),
-    ...((isAgentManagementEnabled || hasMentionedAgents) && { agentManagementContext }),
+    ...(agentManagementContext && { agentManagementContext }),
     ...(agentGroup && { agentGroup }),
-    ...(gtdConfig && { gtd: gtdConfig }),
+    ...(planTodoConfig && { planTodo: planTodoConfig }),
     ...(topicReferences && topicReferences.length > 0 && { topicReferences }),
+    ...(onboardingContext && { onboardingContext }),
   });
 
   log('Input messages count: %d', messages.length);

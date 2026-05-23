@@ -1,5 +1,7 @@
 'use client';
 
+import type { InterestAreaKey } from '@lobechat/const';
+import { normalizeInterestsForStorage, resolveInterestAreaKey } from '@lobechat/const';
 import { Block, Flexbox, Icon, Input, Text } from '@lobehub/ui';
 import { cssVar } from 'antd-style';
 import { BriefcaseIcon } from 'lucide-react';
@@ -11,13 +13,9 @@ import { INTEREST_AREAS } from '@/routes/onboarding/config';
 import { useUserStore } from '@/store/user';
 import { userProfileSelectors } from '@/store/user/selectors';
 
-import { labelStyle, rowStyle } from './ProfileRow';
+import ProfileRow from './ProfileRow';
 
-interface InterestsRowProps {
-  mobile?: boolean;
-}
-
-const InterestsRow = ({ mobile }: InterestsRowProps) => {
+const InterestsRow = () => {
   const { t } = useTranslation('auth');
   const { t: tOnboarding } = useTranslation('onboarding');
   const interests = useUserStore(userProfileSelectors.interests);
@@ -25,22 +23,10 @@ const InterestsRow = ({ mobile }: InterestsRowProps) => {
   const [customInput, setCustomInput] = useState('');
   const [showCustomInput, setShowCustomInput] = useState(false);
   const [saving, setSaving] = useState(false);
+  const normalizedInterests = useMemo(() => normalizeInterestsForStorage(interests), [interests]);
 
-  const areas = useMemo(
-    () =>
-      INTEREST_AREAS.map((area) => ({
-        ...area,
-        label: tOnboarding(`interests.area.${area.key}`),
-      })),
-    [tOnboarding],
-  );
-
-  const toggleInterest = useCallback(
-    async (label: string) => {
-      const updated = interests.includes(label)
-        ? interests.filter((i) => i !== label)
-        : [...interests, label];
-
+  const saveInterests = useCallback(
+    async (updated: string[]) => {
       try {
         setSaving(true);
         await updateInterests(updated);
@@ -54,128 +40,131 @@ const InterestsRow = ({ mobile }: InterestsRowProps) => {
         setSaving(false);
       }
     },
-    [interests, updateInterests],
+    [updateInterests],
+  );
+
+  const areas = useMemo(
+    () =>
+      INTEREST_AREAS.map((area) => ({
+        ...area,
+        label: tOnboarding(`interests.area.${area.key}`),
+      })),
+    [tOnboarding],
+  );
+
+  const toggleInterest = useCallback(
+    async (key: InterestAreaKey) => {
+      const updated = normalizedInterests.includes(key)
+        ? normalizedInterests.filter((i) => i !== key)
+        : [...normalizedInterests, key];
+
+      await saveInterests(updated);
+    },
+    [normalizedInterests, saveInterests],
+  );
+
+  const removeCustomInterest = useCallback(
+    async (interest: string) => {
+      const updated = normalizedInterests.filter((i) => i !== interest);
+
+      await saveInterests(updated);
+    },
+    [normalizedInterests, saveInterests],
   );
 
   const handleAddCustom = useCallback(async () => {
     const trimmed = customInput.trim();
-    if (!trimmed || interests.includes(trimmed)) return;
+    if (!trimmed || normalizedInterests.includes(trimmed)) return;
 
-    const updated = [...interests, trimmed];
+    const updated = [...normalizedInterests, trimmed];
     setCustomInput('');
 
-    try {
-      setSaving(true);
-      await updateInterests(updated);
-    } catch (error) {
-      console.error('Failed to update interests:', error);
-      fetchErrorNotification.error({
-        errorMessage: error instanceof Error ? error.message : String(error),
-        status: 500,
-      });
-    } finally {
-      setSaving(false);
-    }
-  }, [customInput, interests, updateInterests]);
-
-  const content = (
-    <Flexbox gap={12}>
-      <Flexbox horizontal align="center" gap={8} justify="flex-end" wrap="wrap">
-        {areas.map((item) => {
-          const isSelected = interests.includes(item.label);
-          return (
-            <Block
-              clickable
-              horizontal
-              gap={8}
-              key={item.key}
-              padding={8}
-              variant="outlined"
-              style={
-                isSelected
-                  ? {
-                      background: cssVar.colorFillSecondary,
-                      borderColor: cssVar.colorFillSecondary,
-                      opacity: saving ? 0.6 : 1,
-                    }
-                  : { opacity: saving ? 0.6 : 1 }
-              }
-              onClick={() => !saving && toggleInterest(item.label)}
-            >
-              <Icon color={cssVar.colorTextSecondary} icon={item.icon} size={14} />
-              <Text fontSize={13} weight={500}>
-                {item.label}
-              </Text>
-            </Block>
-          );
-        })}
-        {/* Render custom interests */}
-        {interests
-          .filter((i) => !areas.some((a) => a.label === i))
-          .map((interest) => (
-            <Block
-              clickable
-              key={interest}
-              padding={8}
-              variant="outlined"
-              style={{
-                background: cssVar.colorFillSecondary,
-                borderColor: cssVar.colorFillSecondary,
-                opacity: saving ? 0.6 : 1,
-              }}
-              onClick={() => !saving && toggleInterest(interest)}
-            >
-              <Text fontSize={13} weight={500}>
-                {interest}
-              </Text>
-            </Block>
-          ))}
-        <Block
-          clickable
-          horizontal
-          gap={8}
-          padding={8}
-          variant="outlined"
-          style={
-            showCustomInput
-              ? { background: cssVar.colorFillSecondary, borderColor: cssVar.colorFillSecondary }
-              : {}
-          }
-          onClick={() => setShowCustomInput(!showCustomInput)}
-        >
-          <Icon color={cssVar.colorTextSecondary} icon={BriefcaseIcon} size={14} />
-          <Text fontSize={13} weight={500}>
-            {tOnboarding('interests.area.other')}
-          </Text>
-        </Block>
-      </Flexbox>
-      {showCustomInput && (
-        <Input
-          placeholder={tOnboarding('interests.placeholder')}
-          size="small"
-          style={{ width: 200 }}
-          value={customInput}
-          onChange={(e) => setCustomInput(e.target.value)}
-          onPressEnter={handleAddCustom}
-        />
-      )}
-    </Flexbox>
-  );
-
-  if (mobile) {
-    return (
-      <Flexbox gap={12} style={rowStyle}>
-        <Text strong>{t('profile.interests')}</Text>
-        {content}
-      </Flexbox>
-    );
-  }
+    await saveInterests(updated);
+  }, [customInput, normalizedInterests, saveInterests]);
 
   return (
-    <Flexbox horizontal gap={24} style={rowStyle}>
-      <Text style={labelStyle}>{t('profile.interests')}</Text>
-      <Flexbox align="flex-end" style={{ flex: 1 }}>{content}</Flexbox>
-    </Flexbox>
+    <ProfileRow label={t('profile.interests')}>
+      <Flexbox gap={12}>
+        <Flexbox horizontal align="center" gap={8} wrap="wrap">
+          {areas.map((item) => {
+            const isSelected = normalizedInterests.includes(item.key);
+            return (
+              <Block
+                clickable
+                horizontal
+                gap={8}
+                key={item.key}
+                padding={8}
+                variant="outlined"
+                style={
+                  isSelected
+                    ? {
+                        background: cssVar.colorFillSecondary,
+                        borderColor: cssVar.colorFillSecondary,
+                        opacity: saving ? 0.6 : 1,
+                      }
+                    : { opacity: saving ? 0.6 : 1 }
+                }
+                onClick={() => !saving && toggleInterest(item.key)}
+              >
+                <Icon color={cssVar.colorTextSecondary} icon={item.icon} size={14} />
+                <Text fontSize={13} weight={500}>
+                  {item.label}
+                </Text>
+              </Block>
+            );
+          })}
+          {normalizedInterests
+            .filter((i) => !resolveInterestAreaKey(i))
+            .map((interest) => (
+              <Block
+                clickable
+                key={interest}
+                padding={8}
+                variant="outlined"
+                style={{
+                  background: cssVar.colorFillSecondary,
+                  borderColor: cssVar.colorFillSecondary,
+                  opacity: saving ? 0.6 : 1,
+                }}
+                onClick={() => !saving && removeCustomInterest(interest)}
+              >
+                <Text fontSize={13} weight={500}>
+                  {interest}
+                </Text>
+              </Block>
+            ))}
+          <Block
+            clickable
+            horizontal
+            gap={8}
+            padding={8}
+            variant="outlined"
+            style={
+              showCustomInput
+                ? { background: cssVar.colorFillSecondary, borderColor: cssVar.colorFillSecondary }
+                : {}
+            }
+            onClick={() => setShowCustomInput(!showCustomInput)}
+          >
+            <Icon color={cssVar.colorTextSecondary} icon={BriefcaseIcon} size={14} />
+            <Text fontSize={13} weight={500}>
+              {tOnboarding('interests.area.other')}
+            </Text>
+          </Block>
+        </Flexbox>
+        {showCustomInput && (
+          <Input
+            placeholder={tOnboarding('interests.placeholder')}
+            size="small"
+            style={{ width: 200 }}
+            value={customInput}
+            onChange={(e) => setCustomInput(e.target.value)}
+            onPressEnter={handleAddCustom}
+          />
+        )}
+      </Flexbox>
+    </ProfileRow>
   );
 };
 

@@ -1,16 +1,24 @@
+import { isDesktop } from '@lobechat/const';
+import { type ListProjectSkillsResult, type ProjectSkillItem } from '@lobechat/electron-client-ipc';
 import type { IEditor, SlashOptions } from '@lobehub/editor';
+import { SkillsIcon } from '@lobehub/ui/icons';
 import Fuse from 'fuse.js';
 import { $getSelection, $isRangeSelection } from 'lexical';
-import { ArchiveIcon, MessageSquarePlusIcon, WrenchIcon } from 'lucide-react';
+import { ArchiveIcon, MessageSquarePlusIcon } from 'lucide-react';
 import { useCallback } from 'react';
 import { useTranslation } from 'react-i18next';
 
+import { useClientDataSWR } from '@/libs/swr';
+import { localFileService } from '@/services/electron/localFileService';
+import { useAgentStore } from '@/store/agent';
+import { agentByIdSelectors } from '@/store/agent/selectors';
 import { useChatStore } from '@/store/chat';
+import { topicSelectors } from '@/store/chat/selectors';
 
+import { useAgentId } from '../../hooks/useAgentId';
 import { useChatInputStore } from '../../store';
 import { INSERT_ACTION_TAG_COMMAND, type InsertActionTagPayload } from './command';
 import { type ActionTagData, BUILTIN_COMMANDS } from './types';
-import { useEnabledSkills } from './useEnabledSkills';
 
 type SlashItem = NonNullable<SlashOptions['items'] extends (infer U)[] ? U : never>;
 
@@ -31,7 +39,26 @@ export const useSlashActionItems = (): SlashOptions['items'] => {
   const { t } = useTranslation('editor');
   const editorInstance = useChatInputStore((s) => s.editor);
   const activeTopicId = useChatStore((s) => s.activeTopicId);
-  const enabledSkills = useEnabledSkills();
+
+  // Resolve hetero-agent working directory so we can surface its project skills.
+  // Topic-level override takes precedence over the agent's configured cwd.
+  const agentId = useAgentId();
+  const isHetero = useAgentStore((s) =>
+    agentId ? !!agentByIdSelectors.getAgencyConfigById(agentId)(s)?.heterogeneousProvider : false,
+  );
+  const agentWorkingDirectory = useAgentStore((s) =>
+    agentId ? agentByIdSelectors.getAgentWorkingDirectoryById(agentId)(s) : undefined,
+  );
+  const topicWorkingDirectory = useChatStore(topicSelectors.currentTopicWorkingDirectory);
+  const workingDirectory = topicWorkingDirectory || agentWorkingDirectory;
+
+  const skillsEnabled = isDesktop && isHetero && !!workingDirectory;
+  const { data: projectSkillsData } = useClientDataSWR<ListProjectSkillsResult>(
+    skillsEnabled ? ['project-skills', workingDirectory] : null,
+    () => localFileService.listProjectSkills({ scope: workingDirectory! }),
+    { revalidateOnFocus: false, shouldRetryOnError: false },
+  );
+  const projectSkills = projectSkillsData?.skills;
 
   return useCallback(
     async (
@@ -54,16 +81,22 @@ export const useSlashActionItems = (): SlashOptions['items'] => {
         },
       });
 
-      const makeActionItem = (item: ActionTagData): SlashMenuOption => ({
-        icon: WrenchIcon,
-        key: `${item.category}-${item.type}`,
-        label: item.label,
-        metadata: { category: item.category, type: item.type },
+      const makeProjectSkillItem = (skill: ProjectSkillItem): SlashMenuOption => ({
+        // Slash is already implied by the trigger + tag color, so we render the
+        // bare skill name here. The markdown writer adds the `/` back on send.
+        icon: SkillsIcon,
+        key: `project-skill-${skill.name}`,
+        label: skill.name,
+        metadata: {
+          category: 'projectSkill',
+          description: skill.description,
+          type: skill.name,
+        },
         onSelect: (editor: IEditor) => {
           const payload: InsertActionTagPayload = {
-            category: item.category,
-            label: item.label,
-            type: item.type,
+            category: 'projectSkill',
+            label: skill.name,
+            type: skill.name,
           };
           editor.dispatchCommand(INSERT_ACTION_TAG_COMMAND, payload);
         },
@@ -91,29 +124,27 @@ export const useSlashActionItems = (): SlashOptions['items'] => {
 
       if (!isAtLineStart) return [];
 
-      // 1. Built-in commands (filter newTopic when no active topic)
+      // Built-in commands (filter newTopic when no active topic)
       for (const action of BUILTIN_COMMANDS) {
         if (action.type === 'newTopic' && !activeTopicId) continue;
         allItems.push(makeCommandItem(action) as SlashItem);
       }
 
-      // 2. Enabled slash-selectable skills/tools
-      if (enabledSkills.length > 0) {
-        allItems.push({ type: 'divider' } as SlashItem);
-        for (const item of enabledSkills) {
-          allItems.push(makeActionItem(item) as SlashItem);
+      // Hetero-agent project skills (file-system based, resolved by the CLI agent itself)
+      if (projectSkills && projectSkills.length > 0) {
+        for (const skill of projectSkills) {
+          allItems.push(makeProjectSkillItem(skill) as SlashItem);
         }
       }
 
       // Fuzzy filtering
       if (search?.matchingString && search.matchingString.length > 0) {
-        const searchable = allItems.filter((i) => !('type' in i) || (i as any).type !== 'divider');
-        const fuse = new Fuse(searchable, { keys: ['key', 'label'], threshold: 0.4 });
+        const fuse = new Fuse(allItems, { keys: ['key', 'label'], threshold: 0.4 });
         return fuse.search(search.matchingString).map((r) => r.item);
       }
 
       return allItems;
     },
-    [t, editorInstance, activeTopicId, enabledSkills],
+    [t, editorInstance, activeTopicId, projectSkills],
   );
 };

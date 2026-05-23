@@ -25,11 +25,11 @@ export const DEFAULT_AGENT_SEARCH_FC_MODEL = {
 
 export const DEFAULT_AGENT_CHAT_CONFIG: LobeAgentChatConfig = {
   autoCreateTopicThreshold: 2,
+  enableAgentMode: true,
   enableAutoCreateTopic: true,
   enableCompressHistory: true,
   enableContextCompression: true,
   enableHistoryCount: false,
-  enableReasoning: false,
   enableStreaming: true,
   historyCount: 20,
   reasoningBudgetToken: 1024,

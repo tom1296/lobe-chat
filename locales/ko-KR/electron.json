@@ -1,4 +1,13 @@
 {
+  "gateway.description": "설명",
+  "gateway.descriptionPlaceholder": "선택 사항",
+  "gateway.deviceName": "장치 이름",
+  "gateway.deviceNamePlaceholder": "장치 이름을 입력하세요",
+  "gateway.enableConnection": "게이트웨이에 연결",
+  "gateway.statusConnected": "게이트웨이에 연결됨",
+  "gateway.statusConnecting": "게이트웨이에 연결 중...",
+  "gateway.statusDisconnected": "게이트웨이에 연결되지 않음",
+  "gateway.title": "장치 게이트웨이",
   "navigation.chat": "채팅",
   "navigation.discover": "발견",
   "navigation.discoverAssistants": "어시스턴트 발견",
@@ -26,6 +35,7 @@
   "navigation.recentView": "최근 조회",
   "navigation.resources": "리소스",
   "navigation.settings": "설정",
+  "navigation.tasks": "작업",
   "navigation.unpin": "고정 해제",
   "notification.finishChatGeneration": "AI 메시지 생성이 완료되었습니다",
   "proxy.auth": "인증 필요",
@@ -97,6 +107,9 @@
   "tab.closeLeftTabs": "왼쪽 탭 닫기",
   "tab.closeOtherTabs": "다른 탭 닫기",
   "tab.closeRightTabs": "오른쪽 탭 닫기",
+  "tab.newTab": "새 탭",
+  "tab.running": "에이전트 실행 중",
+  "tab.unread": "새 메시지",
   "updater.checkingUpdate": "새 버전 확인",
   "updater.checkingUpdateDesc": "버전 정보를 가져오는 중...",
   "updater.downloadNewVersion": "새 버전 다운로드",
@@ -124,5 +137,7 @@
   "window.close": "창 닫기",
   "window.maximize": "창 최대화",
   "window.minimize": "창 최소화",
-  "window.restore": "창 복원"
+  "window.pinToTop": "맨 위에 고정",
+  "window.restore": "창 복원",
+  "window.unpinFromTop": "맨 위 고정 해제"
 }

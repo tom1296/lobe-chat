@@ -38,7 +38,7 @@ vi.mock('@/store/chat', () => ({
       replaceMessages: vi.fn(),
       internal_dispatchMessage: vi.fn(),
       internal_dispatchTopic: vi.fn(),
-      internal_execAgentRuntime: vi.fn(),
+      executeClientAgent: vi.fn(),
       sendMessage: vi.fn(),
       switchTopic: vi.fn(),
       summaryTopicTitle: vi.fn(),
@@ -356,6 +356,62 @@ describe('ConversationStore', () => {
         });
 
         expect(store.getState().inputMessage).toBe('draft during streaming');
+      });
+
+      it('should filter local-only messages before forwarding to ChatStore.sendMessage', async () => {
+        const context: ConversationContext = {
+          agentId: 'session-1',
+          topicId: 'topic-1',
+          threadId: null,
+        };
+        const chatStoreState = useChatStore.getState();
+        const sendMessageSpy = vi.fn().mockResolvedValue({
+          assistantMessageId: 'assistant-1',
+          userMessageId: 'user-1',
+        });
+
+        vi.mocked(useChatStore.getState).mockReturnValue({
+          ...chatStoreState,
+          sendMessage: sendMessageSpy,
+        } as any);
+
+        const store = createStore({ context });
+
+        act(() => {
+          store.setState({
+            displayMessages: [
+              {
+                content: 'Local welcome',
+                createdAt: 1,
+                id: 'local-msg',
+                metadata: { scope: '__internal_local__' },
+                role: 'assistant',
+                updatedAt: 1,
+              },
+              {
+                content: 'Real assistant',
+                createdAt: 2,
+                id: 'assistant-msg',
+                role: 'assistant',
+                updatedAt: 2,
+              },
+            ],
+          });
+        });
+
+        await act(async () => {
+          await store.getState().sendMessage({ message: 'hello' } as any);
+        });
+
+        expect(sendMessageSpy).toHaveBeenCalledWith(
+          expect.objectContaining({
+            messages: [
+              expect.objectContaining({
+                id: 'assistant-msg',
+              }),
+            ],
+          }),
+        );
       });
     });
   });

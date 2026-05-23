@@ -5,6 +5,8 @@ import os from 'node:os';
 import WebSocket from 'ws';
 
 import type {
+  AgentRunAckMessage,
+  AgentRunRequestMessage,
   ClientMessage,
   ConnectionStatus,
   GatewayClientEvents,
@@ -21,6 +23,7 @@ const DEFAULT_GATEWAY_URL = 'https://device-gateway.lobehub.com';
 const HEARTBEAT_INTERVAL = 30_000; // 30s
 const INITIAL_RECONNECT_DELAY = 1000; // 1s
 const MAX_RECONNECT_DELAY = 30_000; // 30s
+const MAX_MISSED_HEARTBEATS = 3; // Force reconnect after 3 missed acks
 
 // ─── Logger Interface ───
 
@@ -55,6 +58,7 @@ export class GatewayClient extends EventEmitter {
   private heartbeatTimer: ReturnType<typeof setInterval> | null = null;
   private reconnectTimer: ReturnType<typeof setTimeout> | null = null;
   private reconnectDelay = INITIAL_RECONNECT_DELAY;
+  private missedHeartbeats = 0;
   private status: ConnectionStatus = 'disconnected';
   private intentionalDisconnect = false;
   private deviceId: string;
@@ -102,6 +106,25 @@ export class GatewayClient extends EventEmitter {
     return super.emit(event, ...args);
   }
 
+  /**
+   * Update the auth token used for (re)connections.
+   * Call this after refreshing an expired JWT, then call `reconnect()`.
+   */
+  updateToken(token: string): void {
+    this.token = token;
+  }
+
+  /**
+   * Force a reconnect cycle: close the current WebSocket and establish a new connection.
+   * Useful after calling `updateToken()` with a fresh JWT.
+   */
+  async reconnect(): Promise<void> {
+    this.cleanup();
+    this.intentionalDisconnect = false;
+    this.reconnectDelay = INITIAL_RECONNECT_DELAY;
+    this.doConnect();
+  }
+
   async connect(): Promise<void> {
     if (this.status === 'connected' || this.status === 'connecting') {
       return;
@@ -127,6 +150,13 @@ export class GatewayClient extends EventEmitter {
     this.sendMessage({
       ...response,
       type: 'system_info_response',
+    });
+  }
+
+  sendAgentRunAck(response: Omit<AgentRunAckMessage, 'type'>): void {
+    this.sendMessage({
+      ...response,
+      type: 'agent_run_ack',
     });
   }
 
@@ -216,6 +246,7 @@ export class GatewayClient extends EventEmitter {
         }
 
         case 'heartbeat_ack': {
+          this.missedHeartbeats = 0;
           this.emit('heartbeat_ack');
           break;
         }
@@ -227,6 +258,11 @@ export class GatewayClient extends EventEmitter {
 
         case 'system_info_request': {
           this.emit('system_info_request', message as SystemInfoRequestMessage);
+          break;
+        }
+
+        case 'agent_run_request': {
+          this.emit('agent_run_request', message as AgentRunRequestMessage);
           break;
         }
 
@@ -268,7 +304,23 @@ export class GatewayClient extends EventEmitter {
 
   private startHeartbeat() {
     this.stopHeartbeat();
+    this.missedHeartbeats = 0;
     this.heartbeatTimer = setInterval(() => {
+      this.missedHeartbeats++;
+      if (this.missedHeartbeats > MAX_MISSED_HEARTBEATS) {
+        this.logger.warn(`Missed ${this.missedHeartbeats} heartbeat acks, forcing reconnect`);
+        this.closeWebSocket();
+        // Listeners are detached in closeWebSocket; handleClose won't run — drive reconnect here
+        this.stopHeartbeat();
+        if (this.autoReconnect) {
+          this.setStatus('reconnecting');
+          this.scheduleReconnect();
+        } else {
+          this.setStatus('disconnected');
+          this.emit('disconnected');
+        }
+        return;
+      }
       this.sendMessage({ type: 'heartbeat' });
     }, HEARTBEAT_INTERVAL);
   }
@@ -324,14 +376,38 @@ export class GatewayClient extends EventEmitter {
   }
 
   private closeWebSocket() {
-    if (this.ws) {
-      this.ws.removeAllListeners();
-
-      if (this.ws.readyState === WebSocket.OPEN || this.ws.readyState === WebSocket.CONNECTING) {
-        this.ws.close(1000, 'Client disconnect');
-      }
-      this.ws = null;
+    if (!this.ws) {
+      return;
     }
+    const ws = this.ws;
+    const suppressCloseError = (error: Error) => {
+      this.logger.debug(`Ignoring WebSocket error during close: ${error.message}`);
+    };
+    const cleanupCloseErrorSuppression = () => {
+      ws.off('close', cleanupCloseErrorSuppression);
+      ws.off('error', suppressCloseError);
+    };
+
+    // Remove only listeners registered by this client.
+    // Keep a temporary error handler while closing to avoid unhandled
+    // "WebSocket was closed before the connection was established" errors.
+    ws.off('open', this.handleOpen);
+    ws.off('message', this.handleMessage);
+    ws.off('close', this.handleClose);
+    ws.off('error', this.handleError);
+    ws.on('error', suppressCloseError);
+    ws.once('close', cleanupCloseErrorSuppression);
+
+    try {
+      if (ws.readyState === WebSocket.OPEN || ws.readyState === WebSocket.CONNECTING) {
+        ws.close(1000, 'Client disconnect');
+      }
+    } catch (error) {
+      const errorMsg = error instanceof Error ? error.message : String(error);
+      this.logger.warn(`Failed to close WebSocket gracefully: ${errorMsg}`);
+    }
+
+    this.ws = null;
   }
 
   private cleanup() {

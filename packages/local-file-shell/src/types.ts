@@ -4,6 +4,7 @@ export interface RunCommandParams {
   command: string;
   cwd?: string;
   description?: string;
+  env?: Record<string, string>;
   run_in_background?: boolean;
   timeout?: number;
 }
@@ -56,10 +57,14 @@ export interface ReadFileResult {
   filename: string;
   fileType: string;
   lineCount: number;
+  /** Number of returned lines truncated because they exceeded the per-line character cap. */
+  linesTruncated?: number;
   loc: [number, number];
   modifiedTime: Date;
   totalCharCount: number;
   totalLineCount: number;
+  /** True when the returned content was truncated because it exceeded the total character cap. */
+  truncated?: boolean;
 }
 
 export interface WriteFileParams {

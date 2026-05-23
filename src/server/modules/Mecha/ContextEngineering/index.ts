@@ -1,3 +1,4 @@
+import { PageAgentIdentifier } from '@lobechat/builtin-tool-page-agent';
 import { MessagesEngine } from '@lobechat/context-engine';
 import { type OpenAIChatMessage } from '@lobechat/types';
 
@@ -53,14 +54,17 @@ export const serverMessagesEngine = async ({
   provider,
   systemRole,
   inputTemplate,
+  enableAgentMode,
   enableHistoryCount,
   forceFinish,
   historyCount,
   historySummary,
   formatHistorySummary,
+  initialContext,
   knowledge,
   agentDocuments,
   skillsConfig,
+  toolDiscoveryConfig,
   toolsConfig,
   capabilities,
   userMemory,
@@ -69,6 +73,7 @@ export const serverMessagesEngine = async ({
   discordContext,
   evalContext,
   agentManagementContext,
+  onboardingContext,
   pageContentContext,
   topicReferences,
   additionalVariables,
@@ -83,10 +88,11 @@ export const serverMessagesEngine = async ({
     },
 
     // Agent configuration
+    enableAgentMode,
     enableHistoryCount,
 
-    // File context configuration (server always includes file URLs)
-    fileContext: { enabled: true, includeFileUrl: true },
+    // File context refs must stay stable; media URLs are sent through structured parts.
+    fileContext: { enabled: true, includeFileUrl: false },
 
     // Force finish mode (inject summary prompt when maxSteps exceeded)
     forceFinish,
@@ -98,6 +104,8 @@ export const serverMessagesEngine = async ({
     historySummary,
 
     inputTemplate,
+
+    initialContext,
 
     // Knowledge injection
     knowledge: {
@@ -119,7 +127,11 @@ export const serverMessagesEngine = async ({
     timezone: userTimezone,
 
     // Tools configuration
+    toolDiscoveryConfig,
     toolsConfig: {
+      disabledToolIdentifiers:
+        toolsConfig?.disabledToolIdentifiers ??
+        (toolsConfig?.tools?.includes(PageAgentIdentifier) ? undefined : [PageAgentIdentifier]),
       manifests: toolsConfig?.manifests,
       tools: toolsConfig?.tools,
     },
@@ -152,6 +164,7 @@ export const serverMessagesEngine = async ({
     ...(botPlatformContext && { botPlatformContext }),
     ...(discordContext && { discordContext }),
     ...(evalContext && { evalContext }),
+    ...(onboardingContext && { onboardingContext }),
     ...(agentManagementContext && { agentManagementContext }),
     ...(pageContentContext && { pageContentContext }),
   });

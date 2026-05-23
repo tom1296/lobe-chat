@@ -10,6 +10,9 @@ const kimiCodingPlanChatModels: AIChatModelCard[] = [
       video: true,
       vision: true,
     },
+    config: {
+      deploymentName: 'k2p5',
+    },
     contextWindowTokens: 262_144,
     description:
       "Kimi K2.5 is Kimi's most versatile model to date, featuring a native multimodal architecture that supports both vision and text inputs, 'thinking' and 'non-thinking' modes, and both conversational and agent tasks.",
@@ -22,20 +25,6 @@ const kimiCodingPlanChatModels: AIChatModelCard[] = [
     settings: {
       extendParams: ['enableReasoning'],
     },
-    type: 'chat',
-  },
-  {
-    abilities: {
-      functionCall: true,
-    },
-    contextWindowTokens: 131_072,
-    description:
-      'Kimi K2: MoE architecture base model with exceptional code and Agent capabilities.',
-    displayName: 'Kimi K2',
-    id: 'kimi-k2',
-    maxOutput: 65_536,
-    organization: 'Moonshot',
-    releasedAt: '2025-07-01',
     type: 'chat',
   },
   {

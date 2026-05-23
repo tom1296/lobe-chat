@@ -397,6 +397,8 @@ const transformOpenAIStream = (
     if (item.delta) {
       let reasoning_content = (() => {
         if ('reasoning_content' in item.delta) return item.delta.reasoning_content;
+        // Handle Github Copilot's reasoning format
+        if ('reasoning_text' in item.delta) return (item.delta as any).reasoning_text;
         if ('reasoning' in item.delta) return item.delta.reasoning;
         // Handle MiniMax M2 reasoning_details format (array of objects with text field)
         if ('reasoning_details' in item.delta) {
@@ -627,7 +629,9 @@ export const OpenAIStream = (
     transformOpenAIStream(chunk, streamContext, payload);
 
   const readableStream =
-    stream instanceof ReadableStream ? stream : convertIterableToStream(stream);
+    stream instanceof ReadableStream
+      ? stream
+      : convertIterableToStream(stream, { model: payload?.model, provider: payload?.provider });
 
   return (
     readableStream

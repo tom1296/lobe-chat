@@ -2,6 +2,7 @@ import { type SendMessageParams } from '@lobechat/types';
 
 import { useChatStore } from '@/store/chat';
 
+import { isLocalOnlyMessage } from '../../../../utils/localMessages';
 import { type Store as ConversationStore } from '../../../action';
 
 /**
@@ -38,13 +39,21 @@ export const sendMessage = (
 
     // Get global chat store
     const chatStore = useChatStore.getState();
+    const messages = (params.messages ?? displayMessages).filter(
+      (message) => !isLocalOnlyMessage(message),
+    );
 
     // Forward to ChatStore.sendMessage with context and messages
     // Pass displayMessages to decouple sendMessage from store selectors
+    // `onTopicCreated` is invoked from inside ChatStore.sendMessage as soon as
+    // the backend reports a new topic id (only under isolatedTopic contexts),
+    // not here after the full streaming lifecycle — otherwise the isolated
+    // UI would not see the AI response while it is still streaming.
     const result = await chatStore.sendMessage({
       ...params,
       context,
-      messages: params.messages ?? displayMessages,
+      messages,
+      onTopicCreated: hooks.onTopicCreated,
     });
 
     // ===== Hook: onAfterMessageCreate =====

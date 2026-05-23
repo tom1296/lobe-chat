@@ -1,5 +1,15 @@
-import { DEFAULT_DEBOUNCE_MS, MAX_DEBOUNCE_MS } from '../const';
+import { MAX_BOT_DEBOUNCE_MS } from '@lobechat/const';
+
+import {
+  allowFromField,
+  displayToolCallsField,
+  makeDmPolicyField,
+  makeGroupPolicyFields,
+  makeUserIdField,
+  watchKeywordsField,
+} from '../const';
 import type { FieldSchema } from '../types';
+import { DEFAULT_QQ_CONNECTION_MODE } from './const';
 
 export const schema: FieldSchema[] = [
   {
@@ -27,6 +37,20 @@ export const schema: FieldSchema[] = [
     key: 'settings',
     label: 'channel.settings',
     properties: [
+      makeUserIdField('qq'),
+      {
+        key: 'connectionMode',
+        default: DEFAULT_QQ_CONNECTION_MODE,
+        description: 'channel.connectionModeHint',
+        enum: ['websocket', 'webhook'],
+        enumDescriptions: [
+          'channel.connectionModeWebSocketHint',
+          'channel.connectionModeWebhookHint',
+        ],
+        enumLabels: ['channel.connectionModeWebSocket', 'channel.connectionModeWebhook'],
+        label: 'channel.connectionMode',
+        type: 'string',
+      },
       {
         key: 'charLimit',
         default: 2000,
@@ -37,13 +61,24 @@ export const schema: FieldSchema[] = [
         type: 'number',
       },
       {
+        key: 'concurrency',
+        default: 'queue',
+        description: 'channel.concurrencyHint',
+        enum: ['queue', 'debounce'],
+        enumDescriptions: ['channel.concurrencyQueueHint', 'channel.concurrencyDebounceHint'],
+        enumLabels: ['channel.concurrencyQueue', 'channel.concurrencyDebounce'],
+        label: 'channel.concurrency',
+        type: 'string',
+      },
+      {
         key: 'debounceMs',
-        default: DEFAULT_DEBOUNCE_MS,
+        default: 5000,
         description: 'channel.debounceMsHint',
         label: 'channel.debounceMs',
-        maximum: MAX_DEBOUNCE_MS,
-        minimum: 0,
+        maximum: MAX_BOT_DEBOUNCE_MS,
+        minimum: 100,
         type: 'number',
+        visibleWhen: { field: 'concurrency', value: 'debounce' },
       },
       {
         key: 'showUsageStats',
@@ -52,35 +87,11 @@ export const schema: FieldSchema[] = [
         label: 'channel.showUsageStats',
         type: 'boolean',
       },
-      // TODO: DM schema - not implemented yet
-      // {
-      //   key: 'dm',
-      //   label: 'channel.dm',
-      //   properties: [
-      //     {
-      //       key: 'enabled',
-      //       default: true,
-      //       description: 'channel.dmEnabledHint',
-      //       label: 'channel.dmEnabled',
-      //       type: 'boolean',
-      //     },
-      //     {
-      //       key: 'policy',
-      //       default: 'open',
-      //       enum: ['open', 'allowlist', 'disabled'],
-      //       enumLabels: [
-      //         'channel.dmPolicyOpen',
-      //         'channel.dmPolicyAllowlist',
-      //         'channel.dmPolicyDisabled',
-      //       ],
-      //       description: 'channel.dmPolicyHint',
-      //       label: 'channel.dmPolicy',
-      //       type: 'string',
-      //       visibleWhen: { field: 'enabled', value: true },
-      //     },
-      //   ],
-      //   type: 'object',
-      // },
+      displayToolCallsField,
+      makeDmPolicyField({ policy: 'open' }),
+      ...makeGroupPolicyFields({ policy: 'open' }),
+      allowFromField,
+      watchKeywordsField,
     ],
     type: 'object',
   },

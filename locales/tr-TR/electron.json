@@ -1,4 +1,13 @@
 {
+  "gateway.description": "Açıklama",
+  "gateway.descriptionPlaceholder": "Opsiyonel",
+  "gateway.deviceName": "Cihaz Adı",
+  "gateway.deviceNamePlaceholder": "Cihaz adını girin",
+  "gateway.enableConnection": "Ağ Geçidine Bağlan",
+  "gateway.statusConnected": "Ağ Geçidine Bağlandı",
+  "gateway.statusConnecting": "Ağ Geçidine Bağlanıyor...",
+  "gateway.statusDisconnected": "Ağ Geçidine Bağlı Değil",
+  "gateway.title": "Cihaz Ağ Geçidi",
   "navigation.chat": "Sohbet",
   "navigation.discover": "Keşfet",
   "navigation.discoverAssistants": "Asistanları Keşfet",
@@ -26,6 +35,7 @@
   "navigation.recentView": "Son görüntülemeler",
   "navigation.resources": "Kaynaklar",
   "navigation.settings": "Ayarlar",
+  "navigation.tasks": "Görevler",
   "navigation.unpin": "Sabitlemeyi kaldır",
   "notification.finishChatGeneration": "Yapay zeka mesaj oluşturma tamamlandı",
   "proxy.auth": "Kimlik Doğrulama Gerekli",
@@ -97,6 +107,9 @@
   "tab.closeLeftTabs": "Soldaki Sekmeleri Kapat",
   "tab.closeOtherTabs": "Diğer Sekmeleri Kapat",
   "tab.closeRightTabs": "Sağdaki Sekmeleri Kapat",
+  "tab.newTab": "Yeni Sekme",
+  "tab.running": "Aracı çalışıyor",
+  "tab.unread": "Yeni mesaj",
   "updater.checkingUpdate": "Güncellemeler kontrol ediliyor",
   "updater.checkingUpdateDesc": "Sürüm bilgileri alınıyor...",
   "updater.downloadNewVersion": "Yeni sürümü indir",
@@ -124,5 +137,7 @@
   "window.close": "Pencereyi kapat",
   "window.maximize": "Pencereyi büyüt",
   "window.minimize": "Pencereyi küçült",
-  "window.restore": "Pencereyi geri yükle"
+  "window.pinToTop": "Üste sabitle",
+  "window.restore": "Pencereyi geri yükle",
+  "window.unpinFromTop": "Üstten kaldır"
 }
